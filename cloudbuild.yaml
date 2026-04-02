@@ -1,0 +1,14 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - $_IMAGE
+      - .
+    env:
+      - DOCKER_BUILDKIT=1
+images:
+  - $_IMAGE
+timeout: 3600s
+options:
+  machineType: E2_HIGHCPU_32

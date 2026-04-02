@@ -32,13 +32,42 @@ TEXT_ENCODER_PRESETS = {
 
 
 class DemoWrapper:
-    def __init__(self, text_encoder, tmp_folder):
-        self.text_encoder = text_encoder
+    def __init__(self, text_encoder_name, tmp_folder):
+        self.text_encoder_name = text_encoder_name
+        self.text_encoder = None
+        self.init_error = None
         self.tmp_folder = tmp_folder
 
+    def _get_text_encoder(self):
+        if self.text_encoder is not None:
+            return self.text_encoder
+        if self.init_error is not None:
+            raise RuntimeError(self.init_error)
+        try:
+            self.text_encoder = _build_text_encoder(self.text_encoder_name)
+            return self.text_encoder
+        except Exception as error:
+            self.init_error = error
+            raise
+
     def __call__(self, text, filename, progress=gr.Progress()):
+        try:
+            text_encoder = self._get_text_encoder()
+        except Exception as error:
+            output_title = gr.Markdown(visible=True, value="## Encoder initialization failed")
+            output_text = gr.Markdown(
+                visible=True,
+                value=(
+                    "Text encoder could not initialize. "
+                    "If you use gated Hugging Face models, configure a valid HF token in the runtime env.\n\n"
+                    f"Error: `{type(error).__name__}: {error}`"
+                ),
+            )
+            download = gr.DownloadButton(visible=False)
+            return download, output_title, output_text
+
         # Compute text embedding
-        tensor, length = self.text_encoder(text)
+        tensor, length = text_encoder(text)
         embedding = tensor[:length]
         embedding = embedding.cpu().numpy()
 
@@ -83,12 +112,14 @@ def parse_args():
 def main():
     args = parse_args()
     server_name = _get_env("GRADIO_SERVER_NAME", DEFAULT_SERVER_NAME)
-    server_port = int(_get_env("GRADIO_SERVER_PORT", DEFAULT_SERVER_PORT))
+    server_port = int(os.environ.get("GRADIO_SERVER_PORT") or os.environ.get("PORT", str(DEFAULT_SERVER_PORT)))
     theme, css = get_gradio_theme()
     os.makedirs(args.tmp_folder, exist_ok=True)
-    text_encoder = _build_text_encoder(args.text_encoder)
     display_name = TEXT_ENCODER_PRESETS[args.text_encoder]["display_name"]
-    demo_wrapper_fn = DemoWrapper(text_encoder, args.tmp_folder)
+    
+    # Suppress model loading during DemoWrapper initialization to allow graceful degradation
+    # Model will be loaded lazily on first request
+    demo_wrapper_fn = DemoWrapper(args.text_encoder, args.tmp_folder)
 
     with gr.Blocks(title="Text encoder", css=css, theme=theme) as demo:
         gr.Markdown(f"# Text encoder: {display_name}")

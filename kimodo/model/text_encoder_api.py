@@ -52,11 +52,12 @@ class TextEncoderAPI:
         for text in texts:
             filename = self._create_np_random_name()
 
-            result = self.client.predict(
+            # Use a long result timeout to tolerate text-encoder cold-start (LLM2Vec model load ~60-120s).
+            result = self.client.submit(
                 text=text,
                 filename=filename,
                 api_name="/DemoWrapper",
-            )
+            ).result(timeout=300)
             path = result[0]["value"]
             tensor = np.load(path)
             length = tensor.shape[0]

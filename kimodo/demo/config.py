@@ -21,8 +21,17 @@ from kimodo.model.registry import (
 )
 
 SERVER_NAME = os.environ.get("SERVER_NAME", "0.0.0.0")
-SERVER_PORT = int(os.environ.get("SERVER_PORT", "7860"))
-HF_MODE = os.environ.get("HF_MODE", False)
+SERVER_PORT = int(os.environ.get("SERVER_PORT") or os.environ.get("PORT", "7860"))
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+HF_MODE = _env_bool("HF_MODE", False)
 
 # HF mode: user queue and session limit (override via env in Spaces)
 MAX_ACTIVE_USERS = int(os.environ.get("MAX_ACTIVE_USERS", "5"))

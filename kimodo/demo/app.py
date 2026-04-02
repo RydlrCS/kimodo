@@ -177,7 +177,11 @@ class Demo:
                         prompt_set.add(prompt)
 
         if prompt_set:
-            encoder.prewarm(list(prompt_set))
+            try:
+                encoder.prewarm(list(prompt_set))
+            except Exception as error:
+                # Startup should not fail if text encoder is still warming up.
+                print(f"Warning: embedding prewarm skipped: {error}")
 
     def build_constraint_tracks(
         self, client: viser.ClientHandle, skeleton: SkeletonBase
