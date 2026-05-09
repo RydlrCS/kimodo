@@ -8,6 +8,19 @@ from typing import Any
 
 import gradio as gr
 
+try:
+    import spaces  # type: ignore
+except Exception:  # pragma: no cover
+    class _SpacesFallback:
+        @staticmethod
+        def GPU(*args, **kwargs):
+            def _decorator(fn):
+                return fn
+
+            return _decorator
+
+    spaces = _SpacesFallback()
+
 
 def _parse_character_ids(raw: str, count: int) -> list[str]:
     items = [part.strip() for part in (raw or "").split(",") if part.strip()]
@@ -56,7 +69,8 @@ def plan_script(scene_id: str, prompt: str, characters: int, character_ids_raw: 
     return json.dumps(payload, indent=2)
 
 
-def execute_scene(script_json: str, fps: int, seed: int) -> tuple[str, dict[str, Any], str]:
+@spaces.GPU(duration=60)
+def _execute_scene_gpu(script_json: str, fps: int, seed: int) -> tuple[str, dict[str, Any], str]:
     if not script_json.strip():
         return "", {"timeline": []}, "Execution failed: no script"
 
@@ -83,6 +97,10 @@ def execute_scene(script_json: str, fps: int, seed: int) -> tuple[str, dict[str,
         f"frames={summary['state_hash_count']} interactions={summary['interaction_count']}"
     )
     return json.dumps(summary, indent=2), {"timeline": timeline}, status
+
+
+def execute_scene(script_json: str, fps: int, seed: int) -> tuple[str, dict[str, Any], str]:
+    return _execute_scene_gpu(script_json, fps, seed)
 
 
 def render_frame(frame_idx: int, playback_state: dict[str, Any]) -> str:
