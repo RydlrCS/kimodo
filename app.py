@@ -1,137 +1,36 @@
-"""Movimento Space: boot native Kimodo demo UI and embed via proxy."""
+"""Movimento Space entrypoint: run native Kimodo demo directly."""
 from __future__ import annotations
 
-import importlib.util
 import os
-import threading
 import traceback
+import time
 
-import gradio as gr
-
-try:
-    import spaces  # type: ignore
-except Exception:
-    class _SpacesFallback:
-        @staticmethod
-        def GPU(*args, **kwargs):
-            def _decorator(fn):
-                return fn
-
-            return _decorator
-
-    spaces = _SpacesFallback()
-
-
-NATIVE_PORT = int(os.environ.get("KIMODO_NATIVE_PORT", "8080"))
+PORT = int(os.environ.get("PORT", "7860"))
 os.environ.setdefault("SERVER_NAME", "0.0.0.0")
-os.environ.setdefault("SERVER_PORT", str(NATIVE_PORT))
+os.environ["SERVER_PORT"] = str(PORT)
 os.environ.setdefault("HF_MODE", "1")
 # Avoid local LLM2Vec fallback on Spaces (requires gated Llama weights).
 os.environ.setdefault("TEXT_ENCODER_MODE", "api")
 # Prefer CPU on ZeroGPU to avoid low-level CUDA init crashes during model load.
 os.environ.setdefault("KIMODO_DEVICE", "cpu")
 
-_state: dict[str, object] = {
-    "ok": False,
-    "error": None,
-    "trace": None,
-    "demo": None,
-}
-
-
-def _boot_native_demo() -> None:
+def main() -> None:
     try:
-        if importlib.util.find_spec("viser") is None:
-            raise RuntimeError("Missing dependency: viser")
-
         import kimodo
         from kimodo.demo.app import Demo
 
         print(f"[movimento][boot] kimodo_module={getattr(kimodo, '__file__', 'unknown')}")
-        print(f"[movimento][boot] demo_module={getattr(importlib.util.find_spec('kimodo.demo.app'), 'origin', 'unknown')}")
+        print(f"[movimento][boot] mode=native_direct port={PORT}")
+        Demo()
 
-        _state["demo"] = Demo()
-        _state["ok"] = True
-        _state["error"] = None
-        _state["trace"] = None
-    except Exception as exc:  # noqa: BLE001
-        _state["ok"] = False
-        _state["error"] = str(exc)
-        _state["trace"] = traceback.format_exc(limit=8)
-
-
-threading.Thread(target=_boot_native_demo, daemon=True).start()
-
-
-# Keep a GPU-decorated function so HF startup checks pass.
-@spaces.GPU(duration=60)
-def _gpu_healthcheck() -> str:
-    return "ok"
-
-
-def _viewer_html() -> str:
-    # Always target the native Viser app on this Space. This avoids serving
-    # an external fallback UI that can diverge from the deployed code/assets.
-    src = f"/proxy/{NATIVE_PORT}/"
-    return (
-        "<div style='border:1px solid #d9e7ef;border-radius:12px;overflow:hidden;'>"
-        "<div id='kimodo-proxy-status' style='padding:8px 12px;font-size:12px;color:#37566b;"
-        "background:#f4f9fc;border-bottom:1px solid #d9e7ef;'>"
-        "Waiting for native UI to become ready..."
-        "</div>"
-        f"<iframe id='kimodo-proxy-iframe' src='{src}' title='Kimodo UI' style='width:100%;border:0' "
-        "height='920' loading='lazy'></iframe>"
-        "<script>"
-        "(function(){"
-        f"const base='/proxy/{NATIVE_PORT}/';"
-        "const frame=document.getElementById('kimodo-proxy-iframe');"
-        "const status=document.getElementById('kimodo-proxy-status');"
-        "let attached=false;"
-        "async function tryAttach(){"
-        "if(attached){return;}"
-        "try{"
-        "const res=await fetch(base,{method:'GET',cache:'no-store'});"
-        "if(res.ok){"
-        "attached=true;"
-        "status.textContent='Native UI ready';"
-        "frame.src=base+'?t='+Date.now();"
-        "setTimeout(function(){status.style.display='none';}, 1500);"
-        "return;"
-        "}"
-        "status.textContent='Starting native UI...';"
-        "}catch(e){"
-        "status.textContent='Starting native UI...';"
-        "}"
-        "}"
-        "tryAttach();"
-        "const timer=setInterval(tryAttach,3000);"
-        "setTimeout(function(){clearInterval(timer);},120000);"
-        "})();"
-        "</script>"
-        "</div>"
-    )
-
-
-def _status_markdown() -> str:
-    if bool(_state.get("ok")):
-        return f"Native demo running on /proxy/{NATIVE_PORT}/."
-    err = _state.get("error")
-    if err:
-        return f"Native demo failed to start. Reason: {err}"
-    return f"Starting native demo on /proxy/{NATIVE_PORT}/..."
-
-
-def _refresh() -> tuple[str, str]:
-    return _status_markdown(), _viewer_html()
-
-
-with gr.Blocks(title="Movimento") as demo:
-    gr.Markdown("# Movimento")
-    status_md = gr.Markdown(_status_markdown())
-    viewer = gr.HTML(_viewer_html())
-    refresh_btn = gr.Button("Refresh UI Status")
-    refresh_btn.click(fn=_refresh, inputs=[], outputs=[status_md, viewer])
+        # Keep the process alive while Viser serves on SERVER_PORT.
+        while True:
+            time.sleep(3600)
+    except Exception:  # noqa: BLE001
+        print("[movimento][boot][fatal] native demo failed to start")
+        print(traceback.format_exc(limit=12))
+        raise
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))
+    main()
