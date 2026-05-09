@@ -54,7 +54,14 @@ from .state import ClientSession, ModelBundle
 
 class Demo:
     def __init__(self, default_model_name: str = DEFAULT_MODEL):
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        requested_device = (os.environ.get("KIMODO_DEVICE") or "").strip().lower()
+        if requested_device and requested_device != "auto":
+            self.device = requested_device
+        elif HF_MODE:
+            # ZeroGPU can report CUDA availability while blocking low-level CUDA init.
+            self.device = "cpu"
+        else:
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         print(f"Using device: {self.device}")
         self.models: dict[str, ModelBundle] = {}
         resolved = resolve_model_name(default_model_name, "Kimodo")

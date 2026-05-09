@@ -28,6 +28,8 @@ os.environ.setdefault("SERVER_PORT", str(NATIVE_PORT))
 os.environ.setdefault("HF_MODE", "1")
 # Avoid local LLM2Vec fallback on Spaces (requires gated Llama weights).
 os.environ.setdefault("TEXT_ENCODER_MODE", "api")
+# Prefer CPU on ZeroGPU to avoid low-level CUDA init crashes during model load.
+os.environ.setdefault("KIMODO_DEVICE", "cpu")
 
 _state: dict[str, object] = {
     "ok": False,
