@@ -9,12 +9,16 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import HfApi, get_token, hf_hub_download
+from huggingface_hub.errors import HfHubHTTPError
 
 
 DEFAULT_REPO_ID = "bones-studio/seed"
 DEFAULT_REPO_TYPE = "dataset"
+DEFAULT_SPACE_ID = "lablab-ai-amd-developer-hackathon/movimento"
 
 
 def _resolve_token(token: str | None = None) -> str | None:
@@ -24,7 +28,7 @@ def _resolve_token(token: str | None = None) -> str | None:
         value = os.environ.get(env_name)
         if value:
             return value
-    return None
+    return get_token()
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,15 @@ class DownloadManifest:
     local_dir: str
     files: list[str]
     downloaded_at: str
+
+
+@dataclass(frozen=True)
+class SpaceLogCheckResult:
+    space_id: str
+    run_status_code: int
+    build_status_code: int
+    run_ok: bool
+    build_ok: bool
 
 
 def list_repo_files(
@@ -72,7 +85,6 @@ def download_repo_files(
             revision=revision,
             token=resolved_token,
             local_dir=output_dir,
-            local_dir_use_symlinks=False,
         )
         downloaded.append(Path(local_path))
     return downloaded
@@ -124,12 +136,84 @@ def write_manifest(
     return manifest_path
 
 
+def upload_manifest_to_space(
+    manifest_path: str | Path,
+    *,
+    space_id: str = DEFAULT_SPACE_ID,
+    token: str | None = None,
+    path_in_repo: str = "data/bones_seed/manifest.json",
+    commit_message: str = "Update BONES-SEED ingestion manifest",
+    create_pr: bool = True,
+) -> str:
+    """Upload manifest file into a Space repository path for lablab ingestion traceability."""
+    manifest = Path(manifest_path)
+    if not manifest.exists():
+        raise FileNotFoundError(f"Manifest file does not exist: {manifest}")
+
+    api = HfApi(token=_resolve_token(token))
+    try:
+        return api.upload_file(
+            path_or_fileobj=str(manifest),
+            path_in_repo=path_in_repo,
+            repo_id=space_id,
+            repo_type="space",
+            commit_message=commit_message,
+            create_pr=False,
+        )
+    except HfHubHTTPError as exc:
+        if create_pr and "create_pr=1" in str(exc):
+            return api.upload_file(
+                path_or_fileobj=str(manifest),
+                path_in_repo=path_in_repo,
+                repo_id=space_id,
+                repo_type="space",
+                commit_message=commit_message,
+                create_pr=True,
+            )
+        raise
+
+
+def _check_logs_endpoint(url: str, token: str | None, timeout_sec: float) -> tuple[int, bool]:
+    headers = {}
+    resolved = _resolve_token(token)
+    if resolved:
+        headers["Authorization"] = f"Bearer {resolved}"
+    request = Request(url=url, headers=headers, method="GET")
+    try:
+        with urlopen(request, timeout=timeout_sec) as response:
+            status = int(getattr(response, "status", 0))
+            return status, 200 <= status < 300
+    except HTTPError as exc:
+        return int(exc.code), False
+    except URLError:
+        return 0, False
+
+
+def verify_space_logs(
+    *,
+    space_id: str = DEFAULT_SPACE_ID,
+    token: str | None = None,
+    timeout_sec: float = 10.0,
+) -> SpaceLogCheckResult:
+    """Verify build and runtime log endpoints are reachable for the target Space."""
+    base = f"https://huggingface.co/api/spaces/{space_id}/logs"
+    run_status, run_ok = _check_logs_endpoint(f"{base}/run", token, timeout_sec)
+    build_status, build_ok = _check_logs_endpoint(f"{base}/build", token, timeout_sec)
+    return SpaceLogCheckResult(
+        space_id=space_id,
+        run_status_code=run_status,
+        build_status_code=build_status,
+        run_ok=run_ok,
+        build_ok=build_ok,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Browse and download BONES SEED dataset files from Hugging Face.")
     parser.add_argument(
         "command",
-        choices=("list", "download", "prefix"),
-        help="List files, download selected files, or download files by prefix.",
+        choices=("list", "download", "prefix", "verify-logs"),
+        help="List files, download selected files, download files by prefix, or verify Space log endpoints.",
     )
     parser.add_argument("files", nargs="*", help="Exact file paths inside the dataset repository.")
     parser.add_argument("--repo-id", default=DEFAULT_REPO_ID, help="Hugging Face dataset repository id.")
@@ -139,6 +223,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--token", default=None, help="Hugging Face token override.")
     parser.add_argument("--prefix", default=None, help="File prefix to match when using the prefix command.")
     parser.add_argument("--manifest", action="store_true", help="Write a manifest.json after download.")
+    parser.add_argument("--space-id", default=DEFAULT_SPACE_ID, help="Target Space id for manifest publish or logs checks.")
+    parser.add_argument(
+        "--space-manifest-path",
+        default="data/bones_seed/manifest.json",
+        help="Path inside target Space repo where manifest will be uploaded.",
+    )
+    parser.add_argument(
+        "--publish-manifest-to-space",
+        action="store_true",
+        help="Upload generated manifest to the Space repo destination.",
+    )
+    parser.add_argument(
+        "--space-upload-create-pr",
+        action="store_true",
+        help="Force upload as a PR in target Space repo when direct commits are forbidden.",
+    )
+    parser.add_argument(
+        "--logs-timeout-sec",
+        type=float,
+        default=10.0,
+        help="Timeout for log endpoint verification requests.",
+    )
     return parser
 
 
@@ -147,9 +253,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "list":
-        for name in list_repo_files(args.repo_id, repo_type=args.repo_type, revision=args.revision, token=args.token):
-            print(name)
+        try:
+            for name in list_repo_files(args.repo_id, repo_type=args.repo_type, revision=args.revision, token=args.token):
+                print(name)
+        except BrokenPipeError:
+            return 0
         return 0
+
+    if args.command == "verify-logs":
+        result = verify_space_logs(space_id=args.space_id, token=args.token, timeout_sec=args.logs_timeout_sec)
+        print(json.dumps(asdict(result), indent=2, sort_keys=True))
+        return 0 if (result.run_ok and result.build_ok) else 2
 
     if args.command == "download":
         if not args.files:
@@ -186,6 +300,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             revision=args.revision,
         )
         print(manifest_path)
+        if args.publish_manifest_to_space:
+            uploaded = upload_manifest_to_space(
+                manifest_path,
+                space_id=args.space_id,
+                token=args.token,
+                path_in_repo=args.space_manifest_path,
+                create_pr=args.space_upload_create_pr,
+            )
+            print(uploaded)
+    elif args.publish_manifest_to_space:
+        raise SystemExit("--publish-manifest-to-space requires --manifest")
 
     return 0
 
