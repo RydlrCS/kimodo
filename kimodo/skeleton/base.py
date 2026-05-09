@@ -69,6 +69,11 @@ class SkeletonBase(torch.nn.Module):
 
         if load and folder is not None:
             pfolder = Path(folder)
+            if not (pfolder / "joints.p").exists() and self.name is not None:
+                fallback_folder = skeleton_asset_path(self.name)
+                if (fallback_folder / "joints.p").exists():
+                    pfolder = fallback_folder
+                    self.folder = str(pfolder)
             neutral_joints = torch.load(pfolder / "joints.p").squeeze()
             self.register_buffer("neutral_joints", neutral_joints, persistent=False)
 

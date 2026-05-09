@@ -1,0 +1,12 @@
+{
+  "text": "Qwen agentic: chain 10 concise action segments for a single character in a coherent scene.",
+  "duration": 6.0,
+  "num_samples": 1,
+  "seed": 42,
+  "diffusion_steps": 100,
+  "cfg": {
+    "enabled": true,
+    "text_weight": 2.0,
+    "constraint_weight": 2.0
+  }
+}

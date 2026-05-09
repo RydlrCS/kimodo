@@ -47,7 +47,8 @@ from .state import ClientSession
 from kimodo.skeleton import G1Skeleton34, SOMASkeleton30, SOMASkeleton77
 
 
-QWEN_EXAMPLE_NAME = "qwen_agentic_10_actions"
+QWEN_EXAMPLE_NAME = "09_qwen_agentic_actions"
+QWEN_EXAMPLE_LEGACY_NAME = "09_qwen_agentic_10_actions"
 
 
 def extract_intervals_and_singles(t: torch.Tensor):
@@ -307,6 +308,8 @@ def create_gui(
                 example_names_local = list(new_example_dict.keys())
                 if QWEN_EXAMPLE_NAME not in example_names_local:
                     example_names_local.append(QWEN_EXAMPLE_NAME)
+                if QWEN_EXAMPLE_LEGACY_NAME not in example_names_local:
+                    example_names_local.append(QWEN_EXAMPLE_LEGACY_NAME)
                 gui_examples_dropdown.options = example_names_local
                 if keep_selection and gui_examples_dropdown.value in example_names_local:
                     return
@@ -2266,7 +2269,7 @@ def create_gui(
             if session is None:
                 return
 
-            if gui_examples_dropdown.value == QWEN_EXAMPLE_NAME:
+            if gui_examples_dropdown.value in (QWEN_EXAMPLE_NAME, QWEN_EXAMPLE_LEGACY_NAME):
                 load_qwen_example_plan(event_client)
                 return
 
