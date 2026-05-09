@@ -300,6 +300,39 @@ Shutdown: Clean
 
 ---
 
+## Skill 10: Runtime Observability and Commenting Standard
+
+**When to use**: Mandatory for every code card before merge (starting now for Card 6+).
+
+**Prompt template**:
+```
+Audit runtime observability and code comments for:
+- {file_paths}
+
+Check for:
+1. Entry logging at function start for critical runtime paths
+2. Exit logging at function end for critical runtime paths
+3. Failure-path logging for exceptions/retries/fallbacks
+4. Logs include scene_id/request_id/file identifiers where relevant
+5. Complex code blocks include explanatory comments or docstrings
+6. Comments explain intent/flow, not trivial syntax
+
+Output format:
+| Check | Status | Evidence |
+|-------|--------|----------|
+| Entry logging | PASS | function_a, function_b |
+| Exit logging | PASS | function_a, function_b |
+| Failure logs | PASS | retry path + fallback path |
+| Runtime identifiers | PASS | scene_id in planner logs |
+| Complex-flow comments | PASS | scheduler tick-order block documented |
+
+Final verdict: [PASS] or [FAIL] with missing functions listed.
+```
+
+**Verification gate**: All critical runtime functions must have entry/exit logs and complex-flow comments.
+
+---
+
 ## Running Skills in Sequence (Per Card Workflow)
 
 **Before marking a card complete, run these skills in order**:
@@ -308,6 +341,7 @@ Shutdown: Clean
    - Skill 2 (Error Handling)
    - Skill 3 (Schema Validation) — if schemas defined
    - Skill 1 (Lint & Type)
+   - Skill 10 (Runtime Observability and Commenting)
    - Skill 6 (Code Quality Summary)
 
 2. **Integration cards** (planner, generator, scheduler):
@@ -315,16 +349,19 @@ Shutdown: Clean
    - Skill 5 (Integration Smoke Test)
    - Skill 4 (Deterministic Behavior) — if applicable
    - Skill 1 (Lint & Type)
+   - Skill 10 (Runtime Observability and Commenting)
    - Skill 6 (Code Quality Summary)
 
 3. **API/Endpoint cards** (Gradio UI, Space frontend):
    - Skill 7 (API Contract & Live Endpoint Test)
    - Skill 8 (Build & Deployment Readiness)
    - Skill 9 (Space Log Monitoring) — if Space deployed
+   - Skill 10 (Runtime Observability and Commenting)
 
 4. **Dev/Demo cards** (notebooks, templates):
    - Skill 1 (Lint & Type)
    - Skill 5 (Integration Smoke Test, if runnable)
+   - Skill 10 (Runtime Observability and Commenting)
    - Skill 6 (Code Quality Summary)
 
 ---
@@ -343,6 +380,8 @@ Shutdown: Clean
 | API contract | All test cases match schema | Fail card if mismatches |
 | Build & deploy | All checks pass | Fail card if any fail |
 | Space health | Container runs, first request OK | Fail card if unavailable |
+| Runtime observability | Entry+exit logs on critical paths | Fail card if not met |
+| Comment clarity | Complex flow documented | Fail card if not met |
 
 ---
 
@@ -364,6 +403,13 @@ Use this template at the end of each card before requesting approval:
 - [ ] All error paths handled with try/except
 - [ ] Entry/exit logging on critical paths
 - [ ] Graceful fallback behavior documented
+
+### Observability (Skill 10)
+- [ ] Entry logs on critical runtime functions
+- [ ] Exit logs on critical runtime functions
+- [ ] Failure/retry/fallback paths logged
+- [ ] Runtime identifiers included in logs (scene_id/file/space_id)
+- [ ] Complex-flow comments explain intent and order
 
 ### Schema/API (Skill 3, 7)
 - [ ] Valid payloads accepted

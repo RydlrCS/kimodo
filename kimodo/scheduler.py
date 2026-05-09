@@ -12,6 +12,10 @@ from enum import Enum
 from typing import Dict, List, Optional, Any
 import hashlib
 import json
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class CharacterState(Enum):
@@ -120,6 +124,12 @@ class DeterministicLoop:
         seed: int = 42,
         conflict_policy: ConflictResolutionPolicy = ConflictResolutionPolicy.COOLDOWN,
     ):
+        LOGGER.info(
+            "scheduler.loop.init.start fps=%s seed=%s conflict_policy=%s",
+            fps,
+            seed,
+            conflict_policy.value,
+        )
         self.fps = fps
         self.seed = seed
         self.conflict_policy = conflict_policy
@@ -138,6 +148,7 @@ class DeterministicLoop:
         
         # Event log for auditing
         self.tick_history: List[LoopTick] = []
+        LOGGER.info("scheduler.loop.init.exit")
     
     def register_character(
         self,
@@ -146,6 +157,12 @@ class DeterministicLoop:
         priority: int = 0,
     ) -> None:
         """Register a character for this loop."""
+        LOGGER.info(
+            "scheduler.register_character.start character_id=%s skeleton=%s priority=%s",
+            character_id,
+            skeleton_type,
+            priority,
+        )
         if character_id in self.characters:
             raise ValueError(f"Character {character_id} already registered")
         
@@ -154,6 +171,7 @@ class DeterministicLoop:
             skeleton_type=skeleton_type,
             priority=priority,
         )
+        LOGGER.info("scheduler.register_character.exit character_id=%s", character_id)
     
     def _deterministic_rng(self) -> float:
         """Generate deterministic pseudo-random number (0-1)."""
@@ -221,6 +239,13 @@ class DeterministicLoop:
         Returns:
             LoopTick with event history for this frame
         """
+        LOGGER.info(
+            "scheduler.advance_tick.start tick=%s frame=%s chars=%s motions=%s",
+            self.tick_number,
+            self.frame_number,
+            len(self.characters),
+            len(character_motions),
+        )
         tick = LoopTick(
             tick_number=self.tick_number,
             frame_number=self.frame_number,
@@ -267,6 +292,13 @@ class DeterministicLoop:
         
         # 4. Record tick
         self.tick_history.append(tick)
+
+        LOGGER.info(
+            "scheduler.advance_tick.exit tick=%s completed=%s interactions=%s",
+            tick.tick_number,
+            len(tick.completed_segments),
+            len(tick.interactions),
+        )
         
         return tick
     
@@ -296,6 +328,12 @@ class DeterministicLoop:
     
     def reset(self) -> None:
         """Reset loop to initial state (for replay)."""
+        LOGGER.info(
+            "scheduler.reset.start tick=%s frame=%s registered_chars=%s",
+            self.tick_number,
+            self.frame_number,
+            len(self.characters),
+        )
         self.tick_number = 0
         self.frame_number = 0
         self.time_ms = 0.0
@@ -305,6 +343,7 @@ class DeterministicLoop:
         for char_slot in self.characters.values():
             char_slot.current_state = CharacterState.IDLE
             char_slot.segment_state = None
+        LOGGER.info("scheduler.reset.exit")
 
 
 # ============================================================================
