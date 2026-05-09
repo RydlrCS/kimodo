@@ -96,11 +96,12 @@ class QwenPlannerAdapter:
         return fallback
 
     def _build_prompt(self, request: PlannerRequest) -> str:
+        LOGGER.info("planner.build_prompt.start scene_id=%s", request.scene_id)
         char_block = "\n".join(
             f"- {c.character_id} (skeleton={c.skeleton_type}, desc={c.description or 'none'})"
             for c in request.characters
         )
-        return (
+        prompt = (
             "You are a motion-planning copilot. Return strict JSON only, no markdown.\\n"
             "Generate per-character motion segments for this scene.\\n"
             "Rules:\\n"
@@ -115,8 +116,11 @@ class QwenPlannerAdapter:
             f"user_prompt: {request.user_prompt}\\n"
             f"characters:\\n{char_block}\\n"
         )
+        LOGGER.info("planner.build_prompt.exit scene_id=%s prompt_chars=%s", request.scene_id, len(prompt))
+        return prompt
 
     def _parse_json_payload(self, raw_text: str) -> dict[str, Any]:
+        LOGGER.info("planner.parse_json.start")
         text = raw_text.strip()
         if not text:
             raise ValueError("empty model response")
@@ -138,9 +142,11 @@ class QwenPlannerAdapter:
         payload = json.loads(text)
         if not isinstance(payload, dict):
             raise ValueError("planner response must be a JSON object")
+        LOGGER.info("planner.parse_json.exit keys=%s", sorted(payload.keys()))
         return payload
 
     def _normalize_payload(self, payload: dict[str, Any], request: PlannerRequest) -> dict[str, Any]:
+        LOGGER.info("planner.normalize_payload.start scene_id=%s", request.scene_id)
         normalized: dict[str, Any] = {
             "scene_id": request.scene_id,
             "status": self._normalize_status(payload.get("status")),
@@ -180,6 +186,12 @@ class QwenPlannerAdapter:
             **(normalized["metadata"] if isinstance(normalized["metadata"], dict) else {}),
             "normalized": True,
         }
+        LOGGER.info(
+            "planner.normalize_payload.exit scene_id=%s script_chars=%s total_duration=%.2f",
+            request.scene_id,
+            len(normalized["scripts"]),
+            float(normalized["total_duration_sec"]),
+        )
         return normalized
 
     def _normalize_status(self, value: Any) -> str:
@@ -198,6 +210,7 @@ class QwenPlannerAdapter:
         valid_ids: set[str],
         duration_limit_sec: float,
     ) -> list[MotionSegment]:
+        LOGGER.info("planner.normalize_segments.start")
         if not isinstance(raw_segments, list):
             raise ValueError("character script must be a list")
 
@@ -235,6 +248,7 @@ class QwenPlannerAdapter:
                 )
             )
 
+        LOGGER.info("planner.normalize_segments.exit segment_count=%s", len(normalized))
         return normalized
 
     def _clamp_duration(self, value: Any) -> float:
@@ -266,12 +280,13 @@ class QwenPlannerAdapter:
         ]
 
     def _fallback_response(self, request: PlannerRequest, errors: Iterable[str]) -> PlannerResponse:
+        LOGGER.info("planner.fallback_response.start scene_id=%s", request.scene_id)
         scripts = {
             c.character_id: self._default_segments(c.character_id, request.user_prompt)
             for c in request.characters
         }
         total_duration = max(sum(seg.duration_sec for seg in segs) for segs in scripts.values())
-        return PlannerResponse(
+        response = PlannerResponse(
             scene_id=request.scene_id,
             status="partial",
             error_message="; ".join(errors)[:1200] if errors else "model output malformed; fallback used",
@@ -279,3 +294,5 @@ class QwenPlannerAdapter:
             metadata={"fallback_used": True, "normalized": True},
             total_duration_sec=min(request.duration_limit_sec, total_duration),
         )
+        LOGGER.info("planner.fallback_response.exit scene_id=%s", request.scene_id)
+        return response

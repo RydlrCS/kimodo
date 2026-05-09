@@ -12,6 +12,10 @@ from enum import Enum
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 import json
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -495,6 +499,7 @@ def example_generator_request() -> GeneratorRequest:
 
 def validate_schema_examples():
     """Test all schemas with valid and invalid payloads."""
+    LOGGER.info("schemas.validate_schema_examples.start")
     
     print("=== Card 2: Schema Validation Tests ===\n")
     
@@ -581,6 +586,7 @@ def validate_schema_examples():
     
     print()
     print("=== All Schema Tests Complete ===")
+    LOGGER.info("schemas.validate_schema_examples.exit")
 
 
 if __name__ == "__main__":
