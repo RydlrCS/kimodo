@@ -40,7 +40,11 @@ def _boot_native_demo() -> None:
         if importlib.util.find_spec("viser") is None:
             raise RuntimeError("Missing dependency: viser")
 
+        import kimodo
         from kimodo.demo.app import Demo
+
+        print(f"[movimento][boot] kimodo_module={getattr(kimodo, '__file__', 'unknown')}")
+        print(f"[movimento][boot] demo_module={getattr(importlib.util.find_spec('kimodo.demo.app'), 'origin', 'unknown')}")
 
         _state["demo"] = Demo()
         _state["ok"] = True
