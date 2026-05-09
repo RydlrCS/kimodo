@@ -289,9 +289,6 @@ def create_gui(
             examples_base_dir = demo.get_examples_base_dir(model_name, absolute=True)
             example_dict = viser_utils.load_example_cases(examples_base_dir)
             example_names = list(example_dict.keys())
-            gui_examples_debug = client.gui.add_markdown(
-                content=f"Examples loaded: {len(example_names)} | Has 09: {QWEN_EXAMPLE_NAME in example_names}"
-            )
             print(
                 "[kimodo][examples][init]"
                 f" client={client_id} model={model_name} base={examples_base_dir}"
@@ -319,10 +316,6 @@ def create_gui(
                 )
                 example_names_local = list(new_example_dict.keys())
                 gui_examples_dropdown.options = example_names_local
-                gui_examples_debug.content = (
-                    f"Examples loaded: {len(example_names_local)} | "
-                    f"Has 09: {QWEN_EXAMPLE_NAME in example_names_local}"
-                )
                 print(
                     "[kimodo][examples][update][exit]"
                     f" client={client_id} model={model_name} count={len(example_names_local)}"
@@ -393,7 +386,7 @@ def create_gui(
                         min=2,
                         max=1000,
                         step=10,
-                        initial_value=100,
+                        initial_value=50,
                     )
                 with client.gui.add_folder("Classifier-Free Guidance", expand_by_default=False):
                     gui_cfg_checkbox = client.gui.add_checkbox(
@@ -2322,18 +2315,6 @@ def create_gui(
                 f" client={client_id} selected={selected_example} path={example_path}"
             )
             load_example_from_path(event_client, example_path, gui_load_gt_checkbox.value)
-
-        @gui_load_qwen_example_button.on_click
-        def _(event: viser.GuiEvent) -> None:
-            event_client = event.client
-            session = get_active_session(event_client)
-            if session is None:
-                return
-            print(
-                "[kimodo][examples][load_qwen_button]"
-                f" client={client_id} selected={QWEN_EXAMPLE_NAME}"
-            )
-            load_qwen_example_plan(event_client)
 
         @gui_load_example_from_path_button.on_click
         def _(event: viser.GuiEvent) -> None:
