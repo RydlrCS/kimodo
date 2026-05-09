@@ -1,0 +1,10 @@
+{
+  "downloaded_at": "2026-05-09T09:47:54.070930+00:00",
+  "files": [
+    "artifacts/card5_bones_seed/metadata/seed_metadata_v004.csv"
+  ],
+  "local_dir": "artifacts/card5_bones_seed",
+  "repo_id": "bones-studio/seed",
+  "repo_type": "dataset",
+  "revision": null
+}
