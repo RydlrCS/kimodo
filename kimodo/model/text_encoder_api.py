@@ -19,9 +19,17 @@ class TextEncoderAPI:
     """Text encoder API client for motion generation."""
 
     def __init__(self, url: str):
-        self.client = Client(url, verbose=False)
+        # Keep startup resilient: do not connect during app/model initialization.
+        # In strict API mode, we only attempt network calls when embeddings are requested.
+        self.url = url
+        self.client = None
         self.device = "cpu"
         self.dtype = torch.float
+
+    def _get_client(self):
+        if self.client is None:
+            self.client = Client(self.url, verbose=False)
+        return self.client
 
     def _create_np_random_name(self):
         import uuid
@@ -53,7 +61,7 @@ class TextEncoderAPI:
             filename = self._create_np_random_name()
 
             # Use a long result timeout to tolerate text-encoder cold-start (LLM2Vec model load ~60-120s).
-            result = self.client.submit(
+            result = self._get_client().submit(
                 text=text,
                 filename=filename,
                 api_name="/DemoWrapper",
