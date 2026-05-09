@@ -26,6 +26,8 @@ NATIVE_PORT = int(os.environ.get("KIMODO_NATIVE_PORT", "8080"))
 os.environ.setdefault("SERVER_NAME", "0.0.0.0")
 os.environ.setdefault("SERVER_PORT", str(NATIVE_PORT))
 os.environ.setdefault("HF_MODE", "1")
+# Avoid local LLM2Vec fallback on Spaces (requires gated Llama weights).
+os.environ.setdefault("TEXT_ENCODER_MODE", "api")
 
 _state: dict[str, object] = {
     "ok": False,
