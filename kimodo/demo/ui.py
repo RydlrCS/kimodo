@@ -290,6 +290,12 @@ def create_gui(
             example_dict = viser_utils.load_example_cases(examples_base_dir)
             example_names = list(example_dict.keys())
             example_names.append(QWEN_EXAMPLE_NAME)
+            print(
+                "[kimodo][examples][init]"
+                f" client={client_id} model={model_name} base={examples_base_dir}"
+                f" disk_count={len(example_dict)} has_09={QWEN_EXAMPLE_NAME in example_names}"
+                f" tail={example_names[-3:] if len(example_names) >= 3 else example_names}"
+            )
             gui_examples_dropdown = client.gui.add_dropdown(
                 "Example",
                 options=example_names,
@@ -305,12 +311,24 @@ def create_gui(
                 new_example_dict: dict[str, str],
                 keep_selection: bool = True,
             ) -> None:
+                print(
+                    "[kimodo][examples][update][entry]"
+                    f" client={client_id} model={model_name} keep_selection={keep_selection}"
+                    f" incoming_count={len(new_example_dict)} current_value={gui_examples_dropdown.value}"
+                )
                 example_names_local = list(new_example_dict.keys())
                 if QWEN_EXAMPLE_NAME not in example_names_local:
                     example_names_local.append(QWEN_EXAMPLE_NAME)
                 if QWEN_EXAMPLE_LEGACY_NAME not in example_names_local:
                     example_names_local.append(QWEN_EXAMPLE_LEGACY_NAME)
                 gui_examples_dropdown.options = example_names_local
+                print(
+                    "[kimodo][examples][update][exit]"
+                    f" client={client_id} model={model_name} count={len(example_names_local)}"
+                    f" has_09={QWEN_EXAMPLE_NAME in example_names_local}"
+                    f" has_legacy={QWEN_EXAMPLE_LEGACY_NAME in example_names_local}"
+                    f" tail={example_names_local[-3:] if len(example_names_local) >= 3 else example_names_local}"
+                )
                 if keep_selection and gui_examples_dropdown.value in example_names_local:
                     return
                 gui_examples_dropdown.value = example_names_local[0]
@@ -2269,11 +2287,28 @@ def create_gui(
             if session is None:
                 return
 
-            if gui_examples_dropdown.value in (QWEN_EXAMPLE_NAME, QWEN_EXAMPLE_LEGACY_NAME):
+            selected_example = gui_examples_dropdown.value
+            print(
+                "[kimodo][examples][load_click][entry]"
+                f" client={client_id} selected={selected_example}"
+                f" has_09={QWEN_EXAMPLE_NAME in list(gui_examples_dropdown.options)}"
+                f" options_count={len(list(gui_examples_dropdown.options))}"
+            )
+
+            if selected_example in (QWEN_EXAMPLE_NAME, QWEN_EXAMPLE_LEGACY_NAME):
+                print(
+                    "[kimodo][examples][load_click][qwen]"
+                    f" client={client_id} selected={selected_example}"
+                )
                 load_qwen_example_plan(event_client)
                 return
 
-            if not session.example_dict or (gui_examples_dropdown.value not in session.example_dict):
+            if not session.example_dict or (selected_example not in session.example_dict):
+                print(
+                    "[kimodo][examples][load_click][missing]"
+                    f" client={client_id} selected={selected_example}"
+                    f" session_examples={len(session.example_dict) if session.example_dict else 0}"
+                )
                 event_client.add_notification(
                     title="No examples available",
                     body="No examples found for the selected model.",
@@ -2282,7 +2317,11 @@ def create_gui(
                 )
                 return
 
-            example_path = session.example_dict[gui_examples_dropdown.value]
+            example_path = session.example_dict[selected_example]
+            print(
+                "[kimodo][examples][load_click][exit]"
+                f" client={client_id} selected={selected_example} path={example_path}"
+            )
             load_example_from_path(event_client, example_path, gui_load_gt_checkbox.value)
 
         @gui_load_example_from_path_button.on_click

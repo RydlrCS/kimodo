@@ -103,6 +103,7 @@ class Demo:
         self.floor_len = 20.0  # meters
 
     def ensure_examples_layout(self) -> None:
+        print(f"[kimodo][examples_layout][entry] root={EXAMPLES_ROOT_DIR}")
         os.makedirs(EXAMPLES_ROOT_DIR, exist_ok=True)
         for model_dir in MODEL_EXAMPLES_DIRS.values():
             os.makedirs(model_dir, exist_ok=True)
@@ -119,6 +120,18 @@ class Demo:
             )
             if not os.path.exists(dst):
                 shutil.move(src, dst)
+
+        for model_name, model_dir in MODEL_EXAMPLES_DIRS.items():
+            model_examples = []
+            if os.path.isdir(model_dir):
+                model_examples = sorted([d for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))])
+            print(
+                "[kimodo][examples_layout][model]"
+                f" model={model_name} dir={model_dir} count={len(model_examples)}"
+                f" has_09={'09_qwen_agentic_actions' in model_examples}"
+                f" tail={model_examples[-3:] if len(model_examples) >= 3 else model_examples}"
+            )
+        print("[kimodo][examples_layout][exit]")
 
     def get_examples_base_dir(self, model_name: str, absolute: bool = True) -> str:
         return MODEL_EXAMPLES_DIRS[model_name]
@@ -295,6 +308,14 @@ class Demo:
             client=client,
             model_name=self.default_model_name,
             model_fps=model_bundle.model_fps,
+        )
+        dropdown_options = list(gui_examples_dropdown.options)
+        print(
+            "[kimodo][session_setup]"
+            f" client={client.client_id} model={self.default_model_name}"
+            f" example_dict_count={len(example_dict)} dropdown_count={len(dropdown_options)}"
+            f" has_09={'09_qwen_agentic_actions' in dropdown_options}"
+            f" tail={dropdown_options[-3:] if len(dropdown_options) >= 3 else dropdown_options}"
         )
         timeline_data = {
             "tracks": timeline_tracks,
