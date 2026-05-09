@@ -288,9 +288,7 @@ def create_gui(
         with client.gui.add_folder("Examples", expand_by_default=True):
             examples_base_dir = demo.get_examples_base_dir(model_name, absolute=True)
             example_dict = viser_utils.load_example_cases(examples_base_dir)
-            disk_example_names = [name for name in list(example_dict.keys()) if name != QWEN_EXAMPLE_NAME]
-            # Keep 09 visible and selected by default so it is impossible to miss.
-            example_names = [QWEN_EXAMPLE_NAME] + disk_example_names
+            example_names = list(example_dict.keys())
             gui_examples_debug = client.gui.add_markdown(
                 content=f"Examples loaded: {len(example_names)} | Has 09: {QWEN_EXAMPLE_NAME in example_names}"
             )
@@ -303,18 +301,11 @@ def create_gui(
             gui_examples_dropdown = client.gui.add_dropdown(
                 "Example",
                 options=example_names,
-                initial_value=QWEN_EXAMPLE_NAME,
             )
             gui_load_example_button = client.gui.add_button(
                 "Load Example",
-                hint="Load the selected example (or Qwen agentic prompt plan).",
+                hint="Load the selected example.",
                 disabled=False,
-            )
-            gui_load_qwen_example_button = client.gui.add_button(
-                "Load Qwen Example (09)",
-                hint="Directly load the Qwen agentic example plan, bypassing dropdown selection.",
-                disabled=False,
-                color="blue",
             )
 
             def update_examples_dropdown(
@@ -326,10 +317,7 @@ def create_gui(
                     f" client={client_id} model={model_name} keep_selection={keep_selection}"
                     f" incoming_count={len(new_example_dict)} current_value={gui_examples_dropdown.value}"
                 )
-                disk_names_local = [name for name in list(new_example_dict.keys()) if name != QWEN_EXAMPLE_NAME]
-                example_names_local = [QWEN_EXAMPLE_NAME] + disk_names_local
-                if QWEN_EXAMPLE_LEGACY_NAME not in example_names_local:
-                    example_names_local.append(QWEN_EXAMPLE_LEGACY_NAME)
+                example_names_local = list(new_example_dict.keys())
                 gui_examples_dropdown.options = example_names_local
                 gui_examples_debug.content = (
                     f"Examples loaded: {len(example_names_local)} | "
@@ -339,12 +327,10 @@ def create_gui(
                     "[kimodo][examples][update][exit]"
                     f" client={client_id} model={model_name} count={len(example_names_local)}"
                     f" has_09={QWEN_EXAMPLE_NAME in example_names_local}"
-                    f" has_legacy={QWEN_EXAMPLE_LEGACY_NAME in example_names_local}"
                     f" tail={example_names_local[-3:] if len(example_names_local) >= 3 else example_names_local}"
                 )
                 if keep_selection and gui_examples_dropdown.value in example_names_local:
                     return
-                gui_examples_dropdown.value = QWEN_EXAMPLE_NAME
 
         with client.gui.add_folder("Generate", expand_by_default=True):
             gui_duration = client.gui.add_markdown(content=f"Total duration: {DEFAULT_CUR_DURATION:.1f} (sec)")
