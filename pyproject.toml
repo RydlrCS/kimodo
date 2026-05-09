@@ -50,6 +50,7 @@ kimodo_demo = "kimodo.demo:main"
 kimodo_textencoder = "kimodo.scripts.run_text_encoder_server:main"
 kimodo_convert = "kimodo.scripts.motion_convert:main"
 kimodo_bones_seed = "kimodo.scripts.bones_seed:main"
+kimodo_planner = "kimodo.scripts.qwen_planner:main"
 
 [tool.setuptools]
 include-package-data = true
