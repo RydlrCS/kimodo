@@ -70,10 +70,9 @@ def _gpu_healthcheck() -> str:
 
 
 def _viewer_html() -> str:
-    if bool(_state.get("ok")):
-        src = f"/proxy/{NATIVE_PORT}/"
-    else:
-        src = os.environ.get("KIMODO_UI_URL", "https://nvidia-kimodo.hf.space").strip()
+    # Always target the native Viser app on this Space. This avoids serving
+    # an external fallback UI that can diverge from the deployed code/assets.
+    src = f"/proxy/{NATIVE_PORT}/"
     return (
         "<div style='border:1px solid #d9e7ef;border-radius:12px;overflow:hidden;'>"
         f"<iframe src='{src}' title='Kimodo UI' style='width:100%;border:0' "
@@ -87,11 +86,8 @@ def _status_markdown() -> str:
         return f"Native demo running on /proxy/{NATIVE_PORT}/."
     err = _state.get("error")
     if err:
-        return (
-            "Native demo unavailable, showing fallback UI.  "
-            f"Reason: {err}"
-        )
-    return "Starting native demo..."
+        return f"Native demo failed to start. Reason: {err}"
+    return f"Starting native demo on /proxy/{NATIVE_PORT}/..."
 
 
 def _refresh() -> tuple[str, str]:
