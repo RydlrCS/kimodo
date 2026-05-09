@@ -290,6 +290,9 @@ def create_gui(
             example_dict = viser_utils.load_example_cases(examples_base_dir)
             example_names = list(example_dict.keys())
             example_names.append(QWEN_EXAMPLE_NAME)
+            gui_examples_debug = client.gui.add_markdown(
+                content=f"Examples loaded: {len(example_names)} | Has 09: {QWEN_EXAMPLE_NAME in example_names}"
+            )
             print(
                 "[kimodo][examples][init]"
                 f" client={client_id} model={model_name} base={examples_base_dir}"
@@ -305,6 +308,12 @@ def create_gui(
                 "Load Example",
                 hint="Load the selected example (or Qwen agentic prompt plan).",
                 disabled=False,
+            )
+            gui_load_qwen_example_button = client.gui.add_button(
+                "Load Qwen Example (09)",
+                hint="Directly load the Qwen agentic example plan, bypassing dropdown selection.",
+                disabled=False,
+                color="blue",
             )
 
             def update_examples_dropdown(
@@ -322,6 +331,10 @@ def create_gui(
                 if QWEN_EXAMPLE_LEGACY_NAME not in example_names_local:
                     example_names_local.append(QWEN_EXAMPLE_LEGACY_NAME)
                 gui_examples_dropdown.options = example_names_local
+                gui_examples_debug.content = (
+                    f"Examples loaded: {len(example_names_local)} | "
+                    f"Has 09: {QWEN_EXAMPLE_NAME in example_names_local}"
+                )
                 print(
                     "[kimodo][examples][update][exit]"
                     f" client={client_id} model={model_name} count={len(example_names_local)}"
@@ -2323,6 +2336,18 @@ def create_gui(
                 f" client={client_id} selected={selected_example} path={example_path}"
             )
             load_example_from_path(event_client, example_path, gui_load_gt_checkbox.value)
+
+        @gui_load_qwen_example_button.on_click
+        def _(event: viser.GuiEvent) -> None:
+            event_client = event.client
+            session = get_active_session(event_client)
+            if session is None:
+                return
+            print(
+                "[kimodo][examples][load_qwen_button]"
+                f" client={client_id} selected={QWEN_EXAMPLE_NAME}"
+            )
+            load_qwen_example_plan(event_client)
 
         @gui_load_example_from_path_button.on_click
         def _(event: viser.GuiEvent) -> None:
