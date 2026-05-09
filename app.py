@@ -5,6 +5,19 @@ import os
 import traceback
 import time
 
+try:
+    import spaces  # type: ignore
+except Exception:
+    class _SpacesFallback:
+        @staticmethod
+        def GPU(*args, **kwargs):
+            def _decorator(fn):
+                return fn
+
+            return _decorator
+
+    spaces = _SpacesFallback()
+
 PORT = int(os.environ.get("PORT", "7860"))
 os.environ.setdefault("SERVER_NAME", "0.0.0.0")
 os.environ["SERVER_PORT"] = str(PORT)
@@ -13,6 +26,12 @@ os.environ.setdefault("HF_MODE", "1")
 os.environ.setdefault("TEXT_ENCODER_MODE", "api")
 # Prefer CPU on ZeroGPU to avoid low-level CUDA init crashes during model load.
 os.environ.setdefault("KIMODO_DEVICE", "cpu")
+
+
+@spaces.GPU(duration=60)
+def _gpu_healthcheck() -> str:
+    # Required by ZeroGPU startup policy; native demo does not invoke this.
+    return "ok"
 
 def main() -> None:
     try:
