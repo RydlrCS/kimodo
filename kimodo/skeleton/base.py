@@ -69,12 +69,41 @@ class SkeletonBase(torch.nn.Module):
 
         if load and folder is not None:
             pfolder = Path(folder)
-            if not (pfolder / "joints.p").exists() and self.name is not None:
-                fallback_folder = skeleton_asset_path(self.name)
-                if (fallback_folder / "joints.p").exists():
-                    pfolder = fallback_folder
-                    self.folder = str(pfolder)
-            neutral_joints = torch.load(pfolder / "joints.p").squeeze()
+            class_default_name = getattr(self.__class__, "name", None)
+            print(
+                "[kimodo][skeleton][init][entry]"
+                f" class={self.__class__.__name__} name={self.name} class_default={class_default_name}"
+                f" folder={pfolder} joints_exists={(pfolder / 'joints.p').exists()}"
+            )
+            if not (pfolder / "joints.p").exists():
+                candidate_names = []
+                if class_default_name:
+                    candidate_names.append(str(class_default_name))
+                if self.name:
+                    candidate_names.append(str(self.name))
+                # Robust fallback for renamed runtime names in model configs
+                candidate_names.extend(["somaskel30", "somaskel77", "g1skel34", "smplx22"])
+                for candidate in candidate_names:
+                    fallback_folder = skeleton_asset_path(candidate)
+                    if (fallback_folder / "joints.p").exists():
+                        pfolder = fallback_folder
+                        self.folder = str(pfolder)
+                        print(
+                            "[kimodo][skeleton][init][fallback]"
+                            f" class={self.__class__.__name__} candidate={candidate} path={pfolder}"
+                        )
+                        break
+            try:
+                neutral_joints = torch.load(pfolder / "joints.p").squeeze()
+            except Exception as error:
+                print(
+                    "[kimodo][skeleton][init][error]"
+                    f" class={self.__class__.__name__} resolved_folder={pfolder}"
+                    f" dir_exists={pfolder.exists()}"
+                    f" dir_entries={sorted([p.name for p in pfolder.iterdir()]) if pfolder.exists() else []}"
+                    f" error={type(error).__name__}: {error}"
+                )
+                raise
             self.register_buffer("neutral_joints", neutral_joints, persistent=False)
 
             if (pfolder / "bvh_joints.p").exists():
@@ -90,6 +119,11 @@ class SkeletonBase(torch.nn.Module):
             if baked_rest_path.exists():
                 rest_pose_local_rot = torch.load(baked_rest_path).squeeze()
                 self.register_buffer("rest_pose_local_rot", rest_pose_local_rot, persistent=False)
+            print(
+                "[kimodo][skeleton][init][exit]"
+                f" class={self.__class__.__name__} resolved_folder={pfolder}"
+                f" neutral_shape={tuple(self.neutral_joints.shape)}"
+            )
 
         self.bone_order_names = [x for x, y in self.bone_order_names_with_parents]
 
