@@ -1,0 +1,13 @@
+# Runtime dependencies for native Kimodo demo in HF Space
+# Keep this minimal to reduce build time while enabling native UI startup.
+
+gradio==6.14.0
+
+# Native timeline/viser UI (required by kimodo.demo.app)
+viser @ git+https://github.com/nv-tlabs/kimodo-viser.git
+
+# Visualization helpers used by the demo stack
+bvhio
+trimesh>=3.21.7
+scenepic>=1.1.0
+av>=16.1.0
