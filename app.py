@@ -36,6 +36,9 @@ def _gpu_healthcheck() -> str:
 
 def main() -> None:
     try:
+        # Invoke GPU function to satisfy HF Spaces startup requirement.
+        _gpu_healthcheck()
+
         import kimodo
         from kimodo.demo.app import Demo
 
