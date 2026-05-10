@@ -28,6 +28,11 @@ os.environ.setdefault("HF_MODE", "1")
 # Avoid local LLM2Vec fallback on Spaces (requires gated Llama weights).
 os.environ.setdefault("TEXT_ENCODER_MODE", "api")
 os.environ.setdefault("TEXT_ENCODER", "llm2vec")
+os.environ.setdefault("LLM2VEC_BASE_MODEL", "rydlrKE/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp")
+os.environ.setdefault(
+    "LLM2VEC_PEFT_MODEL",
+    "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+)
 TEXT_ENCODER_PORT = int(os.environ.get("TEXT_ENCODER_PORT", "9550"))
 os.environ.setdefault("TEXT_ENCODER_URL", f"http://127.0.0.1:{TEXT_ENCODER_PORT}/")
 # Prefer CPU on ZeroGPU to avoid low-level CUDA init crashes during model load.

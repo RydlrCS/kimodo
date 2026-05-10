@@ -17,12 +17,14 @@ DEFAULT_SERVER_NAME = "0.0.0.0"
 DEFAULT_SERVER_PORT = 9550
 DEFAULT_TMP_FOLDER = "/tmp/text_encoder/"
 DEFAULT_TEXT_ENCODER = "llm2vec"
+DEFAULT_LLM2VEC_BASE = "rydlrKE/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp"
+DEFAULT_LLM2VEC_PEFT = "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised"
 TEXT_ENCODER_PRESETS = {
     "llm2vec": {
         "target": "kimodo.model.LLM2VecEncoder",
         "kwargs": {
-            "base_model_name_or_path": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
-            "peft_model_name_or_path": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+            "base_model_name_or_path": os.getenv("LLM2VEC_BASE_MODEL", DEFAULT_LLM2VEC_BASE),
+            "peft_model_name_or_path": os.getenv("LLM2VEC_PEFT_MODEL", DEFAULT_LLM2VEC_PEFT),
             "dtype": "bfloat16",
             "llm_dim": 4096,
         },
