@@ -123,12 +123,13 @@ class LLM2Vec(nn.Module):
         # pop out encoder args
         keys = ["pooling_mode", "max_length", "doc_max_length", "skip_instruction"]
         encoder_args = {key: kwargs.pop(key, None) for key in keys if kwargs.get(key) is not None}
+        hf_token = kwargs.get("token")
 
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path)
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path, token=hf_token)
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.padding_side = "left"
 
-        config = AutoConfig.from_pretrained(base_model_name_or_path)
+        config = AutoConfig.from_pretrained(base_model_name_or_path, token=hf_token)
         config_class_name = config.__class__.__name__
 
         model_class = cls._get_model_class(config_class_name, enable_bidirectional=enable_bidirectional)
@@ -146,6 +147,7 @@ class LLM2Vec(nn.Module):
             model = PeftModel.from_pretrained(
                 model,
                 base_model_name_or_path,
+                token=hf_token,
             )
             model = model.merge_and_unload()
 
@@ -153,6 +155,7 @@ class LLM2Vec(nn.Module):
             model = PeftModel.from_pretrained(
                 model,
                 peft_model_name_or_path,
+                token=hf_token,
             )
             if merge_peft:
                 model = model.merge_and_unload()

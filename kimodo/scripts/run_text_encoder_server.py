@@ -4,6 +4,8 @@
 import argparse
 import os
 
+os.environ.pop("GRADIO_HOT_RELOAD", None)
+
 import gradio as gr
 import numpy as np
 
@@ -125,7 +127,7 @@ def main():
     # Model will be loaded lazily on first request
     demo_wrapper_fn = DemoWrapper(args.text_encoder, args.tmp_folder)
 
-    with gr.Blocks(title="Text encoder", css=css, theme=theme) as demo:
+    with gr.Blocks(title="Text encoder") as demo:
         gr.Markdown(f"# Text encoder: {display_name}")
         gr.Markdown("## Description")
         gr.Markdown("Get a embeddings from a text.")
@@ -190,7 +192,7 @@ def main():
         )
         clear.click(fn=clear_fn, inputs=None, outputs=outputs)
 
-    demo.launch(server_name=server_name, server_port=server_port)
+    demo.launch(server_name=server_name, server_port=server_port, theme=theme, css=css)
 
 
 if __name__ == "__main__":

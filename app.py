@@ -65,6 +65,9 @@ def _start_text_encoder_server() -> subprocess.Popen:
     hf_token = os.environ.get("HF_TOKEN")
     if hf_token:
         env["HF_TOKEN"] = hf_token
+        env["HUGGING_FACE_HUB_TOKEN"] = hf_token
+        env["HF_HUB_TOKEN"] = hf_token
+        env["HUGGINGFACEHUB_API_TOKEN"] = hf_token
         print(f"[movimento][boot] HF_TOKEN set for text encoder (len={len(hf_token)})")
     else:
         print(f"[movimento][boot] WARNING: HF_TOKEN not found in environment")
