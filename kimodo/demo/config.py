@@ -102,6 +102,12 @@ DEMO_UI_QUICK_START_CORE_MD = """
 - To **edit** a constraint:
     - Move playback to the target frame
     - Click **Enter Editing Mode** in the Constraints tab.
+
+### Qwen Auto-Prompts
+- Set a **Scene context** to describe the overall scenario.
+- **Target actions** controls how many prompts Qwen fills in.
+- Click **Fill Timeline via Qwen** to auto-populate the timeline with text prompts.
+- Enable **Auto-run Generate after loading prompts** to generate immediately.
 """
 
 DEMO_UI_QUICK_START_MODAL_MD = (
@@ -155,6 +161,15 @@ DEMO_UI_INSTRUCTIONS_TAB_MD = (
 **Tips:**
 - The posing skeleton becomes visible in editing mode for precise positioning
 - Use **Snap to constraint** to align the current frame to a constraint
+
+### Qwen Auto-Prompts
+
+1. Expand the **Qwen Auto-Prompts** section in the Generate tab.
+2. Enter a **Scene context** — a short description of the overall scenario (e.g. "A martial arts training session").
+3. Set **Target actions** to control how many timeline segments Qwen fills in.
+4. Click **Fill Timeline via Qwen** — Qwen generates contextual text prompts and places them on the timeline automatically.
+5. Optionally enable **Auto-run Generate after loading prompts** to kick off generation right after the prompts are filled.
+6. Review the generated prompts, adjust durations or text as needed, then click **Generate**.
 
 ### Saving & Loading
 
