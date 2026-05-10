@@ -290,7 +290,8 @@ def create_gui(
             examples_base_dir = demo.get_examples_base_dir(model_name, absolute=True)
             example_dict = viser_utils.load_example_cases(examples_base_dir)
             example_names = list(example_dict.keys())
-            example_names.append(QWEN_EXAMPLE_NAME)
+            if QWEN_EXAMPLE_NAME not in example_names:
+                example_names.append(QWEN_EXAMPLE_NAME)
             gui_examples_dropdown = client.gui.add_dropdown(
                 "Example",
                 options=example_names,
