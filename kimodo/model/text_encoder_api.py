@@ -52,15 +52,27 @@ class TextEncoderAPI:
             candidates = [result]
 
         for item in candidates:
-            if isinstance(item, str) and item:
-                return item
+            # Check for error messages first (e.g., "## Encoder initialization failed")
+            if isinstance(item, str):
+                if item and (item.startswith("##") or "failed" in item.lower() or "error" in item.lower()):
+                    raise RuntimeError(f"Text encoder API error: {item}")
+                if item and item.endswith(".npy"):
+                    return item
+                if item:
+                    # Log unexpected string for debugging
+                    print(f"[text_encoder_api] unexpected string response: {item[:100]}")
+                    
             if isinstance(item, dict):
                 for key in ("value", "path", "name"):
                     value = item.get(key)
                     if isinstance(value, str) and value:
-                        return value
+                        # Check for errors in dict values too
+                        if value.startswith("##") or "failed" in value.lower() or "error" in value.lower():
+                            raise RuntimeError(f"Text encoder API error: {value}")
+                        if value.endswith(".npy"):
+                            return value
 
-        raise RuntimeError(f"Text encoder API returned unexpected payload: {type(result).__name__}")
+        raise RuntimeError(f"Text encoder API returned unexpected payload: {result!r}")
 
     def __call__(self, texts):
         """Encode text prompts into tensors.
