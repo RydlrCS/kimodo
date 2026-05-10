@@ -4,6 +4,8 @@
 
 import logging
 import os
+import subprocess
+import sys
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
@@ -26,6 +28,7 @@ from .skeleton import (
 )
 
 logger = logging.getLogger(__name__)
+_MOTION_CORRECTION_INSTALL_ATTEMPTED = False
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -33,6 +36,39 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _try_install_motion_correction() -> bool:
+    """Best-effort install for runtimes where optional package is missing."""
+    global _MOTION_CORRECTION_INSTALL_ATTEMPTED
+    if _MOTION_CORRECTION_INSTALL_ATTEMPTED:
+        return False
+    _MOTION_CORRECTION_INSTALL_ATTEMPTED = True
+
+    if not _env_bool("KIMODO_AUTO_INSTALL_MOTION_CORRECTION", default=True):
+        return False
+
+    # Prefer explicit override, then common repo/container locations.
+    candidates = [
+        os.environ.get("MOTION_CORRECTION_PATH"),
+        "./MotionCorrection",
+        "/home/user/app/MotionCorrection",
+        "/workspace/MotionCorrection",
+    ]
+    install_target = next((path for path in candidates if path and os.path.isdir(path)), None)
+    if install_target is None:
+        logger.warning("MotionCorrection source directory not found; skipping auto-install attempt.")
+        return False
+
+    cmd = [sys.executable, "-m", "pip", "install", install_target]
+    logger.info("Attempting MotionCorrection install via: %s", " ".join(cmd))
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        logger.warning("MotionCorrection auto-install failed: %s", (proc.stderr or proc.stdout or "").strip())
+        return False
+
+    logger.info("MotionCorrection auto-install succeeded from %s", install_target)
+    return True
 
 
 def extract_input_motion_from_constraints(
@@ -315,14 +351,28 @@ def post_process_motion(
             )
 
     # Call the motion correction for each batch (optional package)
+    import_error: Exception | None = None
     try:
         from motion_correction import motion_postprocess
     except ImportError as e:
+        import_error = e
+        if _try_install_motion_correction():
+            try:
+                from motion_correction import motion_postprocess
+            except ImportError:
+                motion_postprocess = None
+        else:
+            motion_postprocess = None
+
+    if 'motion_postprocess' not in locals() or motion_postprocess is None:
         if _env_bool("KIMODO_STRICT_MOTION_CORRECTION", default=False):
-            raise RuntimeError(
+            err = RuntimeError(
                 "Motion correction is required for this postprocessing path but the "
                 "motion_correction package is not installed. Install with: python -m pip install ./MotionCorrection"
-            ) from e
+            )
+            if import_error is not None:
+                raise err from import_error
+            raise err
 
         logger.warning(
             "motion_correction package is not installed; skipping correction and returning "
