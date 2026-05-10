@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import os
+import socket
+import subprocess
+import sys
 import traceback
 import time
 
@@ -24,6 +27,9 @@ os.environ["SERVER_PORT"] = str(PORT)
 os.environ.setdefault("HF_MODE", "1")
 # Avoid local LLM2Vec fallback on Spaces (requires gated Llama weights).
 os.environ.setdefault("TEXT_ENCODER_MODE", "api")
+os.environ.setdefault("TEXT_ENCODER", "llm2vec")
+TEXT_ENCODER_PORT = int(os.environ.get("TEXT_ENCODER_PORT", "9550"))
+os.environ.setdefault("TEXT_ENCODER_URL", f"http://127.0.0.1:{TEXT_ENCODER_PORT}/")
 # Prefer CPU on ZeroGPU to avoid low-level CUDA init crashes during model load.
 os.environ.setdefault("KIMODO_DEVICE", "cpu")
 
@@ -34,16 +40,42 @@ def _gpu_healthcheck() -> str:
     return "ok"
 
 
+def _wait_for_port(port: int, timeout_s: float = 30.0) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1.5):
+                return
+        except OSError:
+            time.sleep(0.5)
+    raise RuntimeError(f"Text encoder server failed to bind on 127.0.0.1:{port}")
+
+
+def _start_text_encoder_server() -> subprocess.Popen:
+    env = os.environ.copy()
+    env["GRADIO_SERVER_NAME"] = "127.0.0.1"
+    env["GRADIO_SERVER_PORT"] = str(TEXT_ENCODER_PORT)
+    print(f"[movimento][boot] starting text encoder server at 127.0.0.1:{TEXT_ENCODER_PORT}")
+    proc = subprocess.Popen([sys.executable, "-m", "kimodo.scripts.run_text_encoder_server"], env=env)
+    _wait_for_port(TEXT_ENCODER_PORT, timeout_s=45.0)
+    print(f"[movimento][boot] text encoder server ready at 127.0.0.1:{TEXT_ENCODER_PORT}")
+    return proc
+
+
 def main() -> None:
     try:
         # Invoke GPU function to satisfy HF Spaces startup requirement.
         _gpu_healthcheck()
+
+        # Keep existing embedding pipeline (TextEncoderAPI -> local llm2vec server).
+        text_encoder_proc = _start_text_encoder_server()
 
         import kimodo
         from kimodo.demo.app import Demo
 
         print(f"[movimento][boot] kimodo_module={getattr(kimodo, '__file__', 'unknown')}")
         print(f"[movimento][boot] mode=native_direct port={PORT}")
+        print(f"[movimento][boot] text_encoder_pid={text_encoder_proc.pid}")
         Demo()
 
         # Keep the process alive while Viser serves on SERVER_PORT.
