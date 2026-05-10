@@ -162,6 +162,8 @@ def main():
     server_name = _get_env("GRADIO_SERVER_NAME", DEFAULT_SERVER_NAME)
     server_port = int(os.environ.get("GRADIO_SERVER_PORT") or os.environ.get("PORT", str(DEFAULT_SERVER_PORT)))
     theme, css = get_gradio_theme()
+    # Avoid Spaces hot-reload watcher importing `spaces` after CUDA init.
+    os.environ.setdefault("GRADIO_HOT_RELOAD", "false")
     os.makedirs(args.tmp_folder, exist_ok=True)
     display_name = TEXT_ENCODER_PRESETS[args.text_encoder]["display_name"]
 
@@ -172,7 +174,7 @@ def main():
     # Model will be loaded lazily on first request
     demo_wrapper_fn = DemoWrapper(args.text_encoder, args.tmp_folder)
 
-    with gr.Blocks(title="Text encoder", css=css, theme=theme) as demo:
+    with gr.Blocks(title="Text encoder") as demo:
         gr.Markdown(f"# Text encoder: {display_name}")
         gr.Markdown("## Description")
         gr.Markdown("Get a embeddings from a text.")
@@ -237,7 +239,7 @@ def main():
         )
         clear.click(fn=clear_fn, inputs=None, outputs=outputs)
 
-    demo.launch(server_name=server_name, server_port=server_port)
+    demo.launch(server_name=server_name, server_port=server_port, css=css, theme=theme)
 
 
 if __name__ == "__main__":
