@@ -54,7 +54,18 @@ class TextEncoderAPI:
         for item in candidates:
             # Check for error messages first (e.g., "## Encoder initialization failed")
             if isinstance(item, str):
-                if item and (item.startswith("##") or "failed" in item.lower() or "error" in item.lower()):
+                if item and item.startswith("##"):
+                    # This is an error message from the Gradio server
+                    error_msg = item.replace("##", "").strip()
+                    if "initialization failed" in error_msg.lower():
+                        raise RuntimeError(
+                            f"Text encoder initialization failed. This usually indicates:\n"
+                            f"  - Missing or invalid HF_TOKEN for gated models (Llama-3)\n"
+                            f"  - Poor network connectivity during model download\n"
+                            f"  Original error: {error_msg}"
+                        )
+                    raise RuntimeError(f"Text encoder API error: {error_msg}")
+                if "failed" in item.lower() or "error" in item.lower():
                     raise RuntimeError(f"Text encoder API error: {item}")
                 if item and item.endswith(".npy"):
                     return item

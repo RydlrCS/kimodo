@@ -201,7 +201,16 @@ class Demo:
                 encoder.prewarm(list(prompt_set))
             except Exception as error:
                 # Startup should not fail if text encoder is still warming up.
-                print(f"Warning: embedding prewarm skipped: {error}")
+                error_str = str(error)
+                if "Encoder initialization failed" in error_str:
+                    print(
+                        f"⚠️  WARNING: Text encoder failed to initialize: {error}\n"
+                        f"  This usually means the HuggingFace gated model cannot be accessed.\n"
+                        f"  To fix: Set HF_TOKEN environment variable with access to Meta-Llama-3-8B.\n"
+                        f"  Alternatively: Generation will still work but text embeddings may fail."
+                    )
+                else:
+                    print(f"Warning: embedding prewarm skipped: {error}")
 
     def build_constraint_tracks(
         self, client: viser.ClientHandle, skeleton: SkeletonBase
