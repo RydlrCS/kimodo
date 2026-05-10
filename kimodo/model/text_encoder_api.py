@@ -43,6 +43,25 @@ class TextEncoderAPI:
             self.dtype = dtype
         return self
 
+    def _extract_result_path(self, result):
+        """Extract npy path from heterogeneous gradio_client responses."""
+        candidates = []
+        if isinstance(result, (list, tuple)):
+            candidates = list(result)
+        elif result is not None:
+            candidates = [result]
+
+        for item in candidates:
+            if isinstance(item, str) and item:
+                return item
+            if isinstance(item, dict):
+                for key in ("value", "path", "name"):
+                    value = item.get(key)
+                    if isinstance(value, str) and value:
+                        return value
+
+        raise RuntimeError(f"Text encoder API returned unexpected payload: {type(result).__name__}")
+
     def __call__(self, texts):
         """Encode text prompts into tensors.
 
@@ -66,7 +85,7 @@ class TextEncoderAPI:
                 filename=filename,
                 api_name="/DemoWrapper",
             ).result(timeout=300)
-            path = result[0]["value"]
+            path = self._extract_result_path(result)
             tensor = np.load(path)
             length = tensor.shape[0]
 

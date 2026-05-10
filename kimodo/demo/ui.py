@@ -3155,15 +3155,18 @@ def create_gui(
                     gui_save_example_button.disabled = False
                     gui_save_motion_button.disabled = False
                     gui_download_button.disabled = False
-                    try:
-                        event_client.add_notification(
-                            title="Generation failed!",
-                            body=f"Error: {str(e)}",
-                            auto_close_seconds=5.0,
-                            color="red",
-                        )
-                    except Exception:
-                        pass
+
+                # Reuse the same persistent notification so it does not get stuck loading.
+                try:
+                    generating_notif.title = "Generation failed!"
+                    generating_notif.body = f"Error: {str(e)}"
+                    generating_notif.loading = False
+                    generating_notif.with_close_button = True
+                    generating_notif.auto_close_seconds = 6.0
+                    generating_notif.color = "red"
+                except Exception:
+                    pass
+
                 demo.check_cuda_health()
 
     #
