@@ -5,6 +5,7 @@
 import math
 import os
 import threading
+import time
 from typing import Optional
 
 from kimodo.constraints import load_constraints_lst, save_constraints_lst
@@ -289,19 +290,15 @@ def create_gui(
             examples_base_dir = demo.get_examples_base_dir(model_name, absolute=True)
             example_dict = viser_utils.load_example_cases(examples_base_dir)
             example_names = list(example_dict.keys())
-            print(
-                "[kimodo][examples][init]"
-                f" client={client_id} model={model_name} base={examples_base_dir}"
-                f" disk_count={len(example_dict)} has_09={QWEN_EXAMPLE_NAME in example_names}"
-                f" tail={example_names[-3:] if len(example_names) >= 3 else example_names}"
-            )
+            example_names.append(QWEN_EXAMPLE_NAME)
             gui_examples_dropdown = client.gui.add_dropdown(
                 "Example",
                 options=example_names,
+                initial_value=example_names[0],
             )
             gui_load_example_button = client.gui.add_button(
                 "Load Example",
-                hint="Load the selected example.",
+                hint="Load the selected example (or Qwen agentic prompt plan).",
                 disabled=False,
             )
 
@@ -309,21 +306,15 @@ def create_gui(
                 new_example_dict: dict[str, str],
                 keep_selection: bool = True,
             ) -> None:
-                print(
-                    "[kimodo][examples][update][entry]"
-                    f" client={client_id} model={model_name} keep_selection={keep_selection}"
-                    f" incoming_count={len(new_example_dict)} current_value={gui_examples_dropdown.value}"
-                )
                 example_names_local = list(new_example_dict.keys())
+                if QWEN_EXAMPLE_NAME not in example_names_local:
+                    example_names_local.append(QWEN_EXAMPLE_NAME)
+                if QWEN_EXAMPLE_LEGACY_NAME not in example_names_local:
+                    example_names_local.append(QWEN_EXAMPLE_LEGACY_NAME)
                 gui_examples_dropdown.options = example_names_local
-                print(
-                    "[kimodo][examples][update][exit]"
-                    f" client={client_id} model={model_name} count={len(example_names_local)}"
-                    f" has_09={QWEN_EXAMPLE_NAME in example_names_local}"
-                    f" tail={example_names_local[-3:] if len(example_names_local) >= 3 else example_names_local}"
-                )
                 if keep_selection and gui_examples_dropdown.value in example_names_local:
                     return
+                gui_examples_dropdown.value = example_names_local[0]
 
         with client.gui.add_folder("Generate", expand_by_default=True):
             gui_duration = client.gui.add_markdown(content=f"Total duration: {DEFAULT_CUR_DURATION:.1f} (sec)")
@@ -386,7 +377,7 @@ def create_gui(
                         min=2,
                         max=1000,
                         step=10,
-                        initial_value=50,
+                        initial_value=100,
                     )
                 with client.gui.add_folder("Classifier-Free Guidance", expand_by_default=False):
                     gui_cfg_checkbox = client.gui.add_checkbox(
@@ -2279,28 +2270,11 @@ def create_gui(
             if session is None:
                 return
 
-            selected_example = gui_examples_dropdown.value
-            print(
-                "[kimodo][examples][load_click][entry]"
-                f" client={client_id} selected={selected_example}"
-                f" has_09={QWEN_EXAMPLE_NAME in list(gui_examples_dropdown.options)}"
-                f" options_count={len(list(gui_examples_dropdown.options))}"
-            )
-
-            if selected_example in (QWEN_EXAMPLE_NAME, QWEN_EXAMPLE_LEGACY_NAME):
-                print(
-                    "[kimodo][examples][load_click][qwen]"
-                    f" client={client_id} selected={selected_example}"
-                )
+            if gui_examples_dropdown.value in (QWEN_EXAMPLE_NAME, QWEN_EXAMPLE_LEGACY_NAME):
                 load_qwen_example_plan(event_client)
                 return
 
-            if not session.example_dict or (selected_example not in session.example_dict):
-                print(
-                    "[kimodo][examples][load_click][missing]"
-                    f" client={client_id} selected={selected_example}"
-                    f" session_examples={len(session.example_dict) if session.example_dict else 0}"
-                )
+            if not session.example_dict or (gui_examples_dropdown.value not in session.example_dict):
                 event_client.add_notification(
                     title="No examples available",
                     body="No examples found for the selected model.",
@@ -2309,11 +2283,7 @@ def create_gui(
                 )
                 return
 
-            example_path = session.example_dict[selected_example]
-            print(
-                "[kimodo][examples][load_click][exit]"
-                f" client={client_id} selected={selected_example} path={example_path}"
-            )
+            example_path = session.example_dict[gui_examples_dropdown.value]
             load_example_from_path(event_client, example_path, gui_load_gt_checkbox.value)
 
         @gui_load_example_from_path_button.on_click
@@ -3155,18 +3125,16 @@ def create_gui(
                     gui_save_example_button.disabled = False
                     gui_save_motion_button.disabled = False
                     gui_download_button.disabled = False
-
-                # Reuse the same persistent notification so it does not get stuck loading.
-                try:
-                    generating_notif.title = "Generation failed!"
-                    generating_notif.body = f"Error: {str(e)}"
-                    generating_notif.loading = False
-                    generating_notif.with_close_button = True
-                    generating_notif.auto_close_seconds = 6.0
-                    generating_notif.color = "red"
-                except Exception:
-                    pass
-
+                    # Reuse persistent notification instead of creating a new one
+                    try:
+                        generating_notif.title = "Generation failed!"
+                        generating_notif.body = f"Error: {str(e)}"
+                        generating_notif.loading = False
+                        generating_notif.with_close_button = True
+                        generating_notif.auto_close_seconds = 6.0
+                        generating_notif.color = "red"
+                    except Exception:
+                        pass
                 demo.check_cuda_health()
 
     #
@@ -3397,8 +3365,6 @@ def create_gui(
     #
     # Keyboard events
     #
-    space_pressed = [False]
-
     @client.scene.on_keyboard_event("keydown", debounce_ms=100)
     def handle_key(event: viser.KeyboardEvent) -> None:
         # Check if client session still exists
@@ -3407,15 +3373,11 @@ def create_gui(
 
         session = demo.client_sessions[client_id]
 
-        if event.event_type == "keyup":
-            if event.key == " ":
-                space_pressed[0] = False
-            return
-
         # Space bar: only toggle on FIRST press
         if event.key == " ":
-            if not space_pressed[0]:
-                space_pressed[0] = True
+            now = time.monotonic()
+            if now - session.last_space_toggle_time >= 0.2:
+                session.last_space_toggle_time = now
                 play_pause_button_callback(session)
             return
 
