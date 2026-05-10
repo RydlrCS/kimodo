@@ -321,7 +321,7 @@ def post_process_motion(
         if _env_bool("KIMODO_STRICT_MOTION_CORRECTION", default=False):
             raise RuntimeError(
                 "Motion correction is required for this postprocessing path but the "
-                "motion_correction package is not installed. Install with: pip install -e ."
+                "motion_correction package is not installed. Install with: python -m pip install ./MotionCorrection"
             ) from e
 
         logger.warning(
