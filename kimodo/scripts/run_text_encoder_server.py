@@ -4,6 +4,12 @@
 import argparse
 import os
 
+# Import spaces as early as possible in Spaces runtimes.
+try:
+    import spaces  # noqa: F401
+except Exception:
+    pass
+
 import gradio as gr
 import numpy as np
 
