@@ -51,31 +51,22 @@ class TextEncoderAPI:
         elif result is not None:
             candidates = [result]
 
+        # First pass: check for valid .npy paths
         for item in candidates:
-            # Check for error title marker first (e.g., "## Encoder initialization failed")
-            if isinstance(item, str):
-                if item and item.startswith("##"):
-                    error_msg = item.replace("##", "").strip()
-                    # Collect remaining candidates for more detail
-                    rest = [c for c in candidates if c is not item and isinstance(c, str) and c]
-                    detail = " | ".join(rest) if rest else ""
-                    full_msg = f"{error_msg}" + (f": {detail}" if detail else "")
-                    raise RuntimeError(f"Text encoder server error: {full_msg}")
-                if item and item.endswith(".npy"):
-                    return item
-                if item:
-                    # Log unexpected string for debugging
-                    print(f"[text_encoder_api] unexpected string response: {item[:100]}")
-                    
-            if isinstance(item, dict):
-                for key in ("value", "path", "name"):
-                    value = item.get(key)
-                    if isinstance(value, str) and value:
-                        # Check for errors in dict values too
-                        if value.startswith("##") or "failed" in value.lower() or "error" in value.lower():
-                            raise RuntimeError(f"Text encoder API error: {value}")
-                        if value.endswith(".npy"):
-                            return value
+            if isinstance(item, str) and item and item.endswith(".npy"):
+                return item
+
+        # Second pass: collect all error indicators
+        error_parts = []
+        for item in candidates:
+            if isinstance(item, str) and item:
+                if item.startswith("##") or "failed" in item.lower() or "error" in item.lower():
+                    error_parts.append(item.strip())
+
+        if error_parts:
+            # Combine all error messages
+            full_error = "\n".join(error_parts)
+            raise RuntimeError(f"Text encoder initialization failed:\n{full_error}")
 
         raise RuntimeError(f"Text encoder API returned unexpected payload: {result!r}")
 
