@@ -687,8 +687,8 @@ class Demo:
             )
         else:
             image = None
-        titlebar_theme = TitlebarConfig(buttons=buttons, image=image, title_text="Kimodo")
-        client.gui.set_panel_label("Kimodo")
+        titlebar_theme = TitlebarConfig(buttons=buttons, image=image, title_text="Movimento")
+        client.gui.set_panel_label("Movimento")
         client.gui.configure_theme(
             titlebar_content=titlebar_theme,
             control_layout="floating",  # "floating",  # ['floating', 'collapsible', 'fixed']
