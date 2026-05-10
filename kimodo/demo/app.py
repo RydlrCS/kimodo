@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import logging
 import os
 import shutil
 import threading
@@ -50,6 +51,11 @@ from .config import (
 from .embedding_cache import CachedTextEncoder
 from .queue_manager import QueueManager, UserQueue
 from .state import ClientSession, ModelBundle
+
+# Hosted runtimes (HF/Cloud Run) often send non-WS probes to the WS endpoint.
+# Suppress noisy stack traces for these expected invalid handshakes.
+logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
+logging.getLogger("websockets.asyncio.server").setLevel(logging.CRITICAL)
 
 
 class Demo:
