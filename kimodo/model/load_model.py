@@ -167,6 +167,15 @@ def _build_api_text_encoder_conf(text_encoder_url: str) -> dict:
     }
 
 
+def _probe_api_text_encoder(text_encoder_url: str, autostart_enabled: bool) -> None:
+    """Instantiate and probe a text encoder API endpoint, raising on failure."""
+    if autostart_enabled:
+        _ensure_text_encoder_server(text_encoder_url)
+    api_conf = _build_api_text_encoder_conf(text_encoder_url)
+    text_encoder = instantiate_from_dict(api_conf)
+    text_encoder(["healthcheck"])
+
+
 def _build_local_text_encoder_conf() -> dict:
     text_encoder_name = get_env_var("TEXT_ENCODER", DEFAULT_TEXT_ENCODER)
     if text_encoder_name not in TEXT_ENCODER_PRESETS:
@@ -187,23 +196,33 @@ def _select_text_encoder_conf(text_encoder_url: str) -> dict:
     # - "auto": try API first, fallback to local if unreachable
     mode = get_env_var("TEXT_ENCODER_MODE", "auto").lower()
     autostart_enabled = _env_bool("TEXT_ENCODER_AUTOSTART", True)
+    local_api_url = get_env_var("TEXT_ENCODER_LOCAL_URL", DEFAULT_TEXT_ENCODER_URL)
     if mode == "local":
         return _build_local_text_encoder_conf()
     if mode == "api":
-        if autostart_enabled:
-            _ensure_text_encoder_server(text_encoder_url)
-        api_conf = _build_api_text_encoder_conf(text_encoder_url)
-        text_encoder = instantiate_from_dict(api_conf)
-        text_encoder(["healthcheck"])
-        return api_conf
+        try:
+            _probe_api_text_encoder(text_encoder_url, autostart_enabled)
+            return _build_api_text_encoder_conf(text_encoder_url)
+        except Exception as error:
+            # In native/direct runtimes a local encoder process may be running while
+            # TEXT_ENCODER_URL points to a remote service. Prefer local API fallback.
+            if (
+                not _is_local_text_encoder_url(text_encoder_url)
+                and local_api_url
+                and _is_local_text_encoder_url(local_api_url)
+                and _is_port_open(local_api_url)
+            ):
+                print(
+                    "Configured remote text encoder is unreachable; retrying against local "
+                    f"encoder URL {local_api_url}. ({type(error).__name__}: {error})"
+                )
+                _probe_api_text_encoder(local_api_url, autostart_enabled=False)
+                return _build_api_text_encoder_conf(local_api_url)
+            raise
 
     api_conf = _build_api_text_encoder_conf(text_encoder_url)
     try:
-        if autostart_enabled:
-            _ensure_text_encoder_server(text_encoder_url)
-        text_encoder = instantiate_from_dict(api_conf)
-        # Probe availability early so inference doesn't fail later.
-        text_encoder(["healthcheck"])
+        _probe_api_text_encoder(text_encoder_url, autostart_enabled)
         return api_conf
     except Exception as error:
         print(
