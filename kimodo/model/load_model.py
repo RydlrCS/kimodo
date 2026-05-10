@@ -67,6 +67,17 @@ def _is_port_open(text_encoder_url: str, timeout_sec: float = 1.0) -> bool:
             return False
 
 
+def _is_http_ready(text_encoder_url: str, timeout_sec: float = 3.0) -> bool:
+    """Return True when the Gradio server at *text_encoder_url* responds to HTTP (serves /info)."""
+    try:
+        import urllib.request
+
+        info_url = text_encoder_url.rstrip("/") + "/info"
+        req = urllib.request.urlopen(info_url, timeout=timeout_sec)  # noqa: S310
+        return req.status == 200
+    except Exception:
+        return False
+
 def _build_text_encoder_env() -> dict[str, str]:
     env = os.environ.copy()
     token = (
@@ -104,8 +115,14 @@ def _ensure_text_encoder_server(text_encoder_url: str) -> None:
     deadline = time.time() + startup_timeout_sec
     while time.time() < deadline:
         if _is_port_open(text_encoder_url):
-            print("Text encoder server is reachable.")
-            return
+            # Port is open — wait for HTTP layer to be ready (Gradio SSR init can lag)
+            http_deadline = min(time.time() + 30, deadline)
+            while time.time() < http_deadline:
+                if _is_http_ready(text_encoder_url):
+                    print("Text encoder server is HTTP-ready.")
+                    return
+                time.sleep(1.0)
+            # HTTP not ready yet but deadline not reached — keep outer loop going
         if _TEXT_ENCODER_SERVER_PROCESS.poll() is not None:
             raise RuntimeError(
                 "Text encoder server process exited during startup. "
