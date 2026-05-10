@@ -38,6 +38,8 @@ class ClientSession:
     frame_idx: int = 0
     playing: bool = False
     playback_speed: float = DEFAULT_PLAYBACK_SPEED
+    playback_time_accumulator: float = 0.0
+    last_space_toggle_time: float = 0.0
     cur_duration: float = DEFAULT_CUR_DURATION
     max_frame_idx: int = 100  # will be updated based on model_fps
     updating_motions: bool = False
