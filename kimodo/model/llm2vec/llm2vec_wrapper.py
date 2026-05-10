@@ -24,7 +24,12 @@ class LLM2VecEncoder:
         self.llm_dim = llm_dim
 
         cache_dir = os.environ.get("HUGGINGFACE_CACHE_DIR")
-        hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        hf_token = (
+            os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+            or os.environ.get("HF_HUB_TOKEN")
+            or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        )
 
         if "TEXT_ENCODERS_DIR" in os.environ:
             base_model_name_or_path = os.path.join(os.environ["TEXT_ENCODERS_DIR"], base_model_name_or_path)

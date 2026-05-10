@@ -4,10 +4,9 @@
 import argparse
 import os
 
-os.environ.pop("GRADIO_HOT_RELOAD", None)
-
 import gradio as gr
 import numpy as np
+from huggingface_hub import HfApi
 
 from kimodo.model import resolve_target
 
@@ -19,20 +18,65 @@ DEFAULT_SERVER_NAME = "0.0.0.0"
 DEFAULT_SERVER_PORT = 9550
 DEFAULT_TMP_FOLDER = "/tmp/text_encoder/"
 DEFAULT_TEXT_ENCODER = "llm2vec"
-DEFAULT_LLM2VEC_BASE = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-DEFAULT_LLM2VEC_PEFT = "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised"
 TEXT_ENCODER_PRESETS = {
     "llm2vec": {
         "target": "kimodo.model.LLM2VecEncoder",
         "kwargs": {
-            "base_model_name_or_path": os.getenv("LLM2VEC_BASE_MODEL", DEFAULT_LLM2VEC_BASE),
-            "peft_model_name_or_path": os.getenv("LLM2VEC_PEFT_MODEL", DEFAULT_LLM2VEC_PEFT),
+            "base_model_name_or_path": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
+            "peft_model_name_or_path": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
             "dtype": "bfloat16",
             "llm_dim": 4096,
         },
         "display_name": "LLM2Vec",
     }
 }
+
+
+def _get_hf_token() -> str | None:
+    return (
+        os.environ.get("HF_TOKEN")
+        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        or os.environ.get("HF_HUB_TOKEN")
+        or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+    )
+
+
+def _validate_text_encoder_startup(text_encoder_name: str) -> None:
+    """Fail fast before launching Gradio if the text encoder cannot be resolved."""
+    if text_encoder_name not in TEXT_ENCODER_PRESETS:
+        available = ", ".join(sorted(TEXT_ENCODER_PRESETS))
+        raise ValueError(f"Unknown TEXT_ENCODER='{text_encoder_name}'. Available: {available}")
+
+    preset = TEXT_ENCODER_PRESETS[text_encoder_name]
+    token = _get_hf_token()
+    text_encoders_dir = os.environ.get("TEXT_ENCODERS_DIR")
+
+    if text_encoders_dir:
+        base_model_path = os.path.join(text_encoders_dir, preset["kwargs"]["base_model_name_or_path"])
+        peft_model_path = os.path.join(text_encoders_dir, preset["kwargs"]["peft_model_name_or_path"])
+        missing = [path for path in (base_model_path, peft_model_path) if not os.path.exists(path)]
+        if missing:
+            raise RuntimeError(
+                "TEXT_ENCODERS_DIR is set, but the following local model paths are missing: "
+                + ", ".join(missing)
+            )
+        return
+
+    if not token:
+        raise RuntimeError(
+            "HF token is missing. Set one of HF_TOKEN, HUGGING_FACE_HUB_TOKEN, HF_HUB_TOKEN, or "
+            "HUGGINGFACEHUB_API_TOKEN before starting the text encoder server."
+        )
+
+    api = HfApi()
+    for repo_id, label in (
+        (preset["kwargs"]["base_model_name_or_path"], "base model"),
+        (preset["kwargs"]["peft_model_name_or_path"], "PEFT adapter"),
+    ):
+        try:
+            api.model_info(repo_id=repo_id, token=token)
+        except Exception as error:
+            raise RuntimeError(f"Failed to access {label} '{repo_id}' with the configured HF token: {error}") from error
 
 
 class DemoWrapper:
@@ -52,8 +96,6 @@ class DemoWrapper:
             return self.text_encoder
         except Exception as error:
             self.init_error = error
-            import traceback
-            traceback.print_exc()
             raise
 
     def __call__(self, text, filename, progress=gr.Progress()):
@@ -122,12 +164,15 @@ def main():
     theme, css = get_gradio_theme()
     os.makedirs(args.tmp_folder, exist_ok=True)
     display_name = TEXT_ENCODER_PRESETS[args.text_encoder]["display_name"]
+
+    if _get_env("TEXT_ENCODER_VALIDATE_STARTUP", "1") != "0":
+        _validate_text_encoder_startup(args.text_encoder)
     
     # Suppress model loading during DemoWrapper initialization to allow graceful degradation
     # Model will be loaded lazily on first request
     demo_wrapper_fn = DemoWrapper(args.text_encoder, args.tmp_folder)
 
-    with gr.Blocks(title="Text encoder") as demo:
+    with gr.Blocks(title="Text encoder", css=css, theme=theme) as demo:
         gr.Markdown(f"# Text encoder: {display_name}")
         gr.Markdown("## Description")
         gr.Markdown("Get a embeddings from a text.")
@@ -192,7 +237,7 @@ def main():
         )
         clear.click(fn=clear_fn, inputs=None, outputs=outputs)
 
-    demo.launch(server_name=server_name, server_port=server_port, theme=theme, css=css)
+    demo.launch(server_name=server_name, server_port=server_port)
 
 
 if __name__ == "__main__":

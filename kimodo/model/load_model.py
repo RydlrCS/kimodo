@@ -2,8 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Load Kimodo diffusion models from local checkpoints or Hugging Face."""
 
+import os
+import socket
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from huggingface_hub import snapshot_download
 from omegaconf import OmegaConf
@@ -20,19 +26,97 @@ from .loading import (
 from .registry import get_model_info, resolve_model_name
 
 DEFAULT_TEXT_ENCODER = "llm2vec"
-DEFAULT_LLM2VEC_BASE = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-DEFAULT_LLM2VEC_PEFT = "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised"
 TEXT_ENCODER_PRESETS = {
     "llm2vec": {
         "target": "kimodo.model.LLM2VecEncoder",
         "kwargs": {
-            "base_model_name_or_path": get_env_var("LLM2VEC_BASE_MODEL", DEFAULT_LLM2VEC_BASE),
-            "peft_model_name_or_path": get_env_var("LLM2VEC_PEFT_MODEL", DEFAULT_LLM2VEC_PEFT),
+            "base_model_name_or_path": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
+            "peft_model_name_or_path": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
             "dtype": "bfloat16",
             "llm_dim": 4096,
         },
     }
 }
+
+_TEXT_ENCODER_SERVER_PROCESS: subprocess.Popen | None = None
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = get_env_var(name, str(default)).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _is_local_text_encoder_url(text_encoder_url: str) -> bool:
+    parsed = urlparse(text_encoder_url)
+    host = (parsed.hostname or "").strip().lower()
+    return host in {"127.0.0.1", "localhost", "0.0.0.0"}
+
+
+def _is_port_open(text_encoder_url: str, timeout_sec: float = 1.0) -> bool:
+    parsed = urlparse(text_encoder_url)
+    host = parsed.hostname or "127.0.0.1"
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    port = parsed.port or 9550
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout_sec)
+        try:
+            sock.connect((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def _build_text_encoder_env() -> dict[str, str]:
+    env = os.environ.copy()
+    token = (
+        env.get("HF_TOKEN")
+        or env.get("HUGGING_FACE_HUB_TOKEN")
+        or env.get("HF_HUB_TOKEN")
+        or env.get("HUGGINGFACEHUB_API_TOKEN")
+    )
+    if token:
+        env.setdefault("HF_TOKEN", token)
+        env.setdefault("HUGGING_FACE_HUB_TOKEN", token)
+        env.setdefault("HF_HUB_TOKEN", token)
+        env.setdefault("HUGGINGFACEHUB_API_TOKEN", token)
+    return env
+
+
+def _ensure_text_encoder_server(text_encoder_url: str) -> None:
+    global _TEXT_ENCODER_SERVER_PROCESS
+
+    if not _is_local_text_encoder_url(text_encoder_url):
+        return
+    if _is_port_open(text_encoder_url):
+        return
+
+    if _TEXT_ENCODER_SERVER_PROCESS is not None and _TEXT_ENCODER_SERVER_PROCESS.poll() is None:
+        return
+
+    startup_timeout_sec = int(get_env_var("TEXT_ENCODER_STARTUP_TIMEOUT_SEC", "90"))
+    print(f"Starting local text encoder server for URL {text_encoder_url}...")
+    _TEXT_ENCODER_SERVER_PROCESS = subprocess.Popen(
+        [sys.executable, "-m", "kimodo.scripts.run_text_encoder_server"],
+        env=_build_text_encoder_env(),
+    )
+
+    deadline = time.time() + startup_timeout_sec
+    while time.time() < deadline:
+        if _is_port_open(text_encoder_url):
+            print("Text encoder server is reachable.")
+            return
+        if _TEXT_ENCODER_SERVER_PROCESS.poll() is not None:
+            raise RuntimeError(
+                "Text encoder server process exited during startup. "
+                "Check server logs for details from kimodo.scripts.run_text_encoder_server."
+            )
+        time.sleep(1.0)
+
+    raise RuntimeError(
+        "Timed out waiting for local text encoder server to open its port. "
+        "Adjust TEXT_ENCODER_STARTUP_TIMEOUT_SEC if cold starts are slow."
+    )
 
 
 def _resolve_hf_model_path(modelname: str) -> Path:
@@ -85,13 +169,21 @@ def _select_text_encoder_conf(text_encoder_url: str) -> dict:
     # - "local": force local LLM2VecEncoder
     # - "auto": try API first, fallback to local if unreachable
     mode = get_env_var("TEXT_ENCODER_MODE", "auto").lower()
+    autostart_enabled = _env_bool("TEXT_ENCODER_AUTOSTART", True)
     if mode == "local":
         return _build_local_text_encoder_conf()
     if mode == "api":
-        return _build_api_text_encoder_conf(text_encoder_url)
+        if autostart_enabled:
+            _ensure_text_encoder_server(text_encoder_url)
+        api_conf = _build_api_text_encoder_conf(text_encoder_url)
+        text_encoder = instantiate_from_dict(api_conf)
+        text_encoder(["healthcheck"])
+        return api_conf
 
     api_conf = _build_api_text_encoder_conf(text_encoder_url)
     try:
+        if autostart_enabled:
+            _ensure_text_encoder_server(text_encoder_url)
         text_encoder = instantiate_from_dict(api_conf)
         # Probe availability early so inference doesn't fail later.
         text_encoder(["healthcheck"])
@@ -179,16 +271,33 @@ def load_model(
         pass
 
     text_encoder_url = get_env_var("TEXT_ENCODER_URL", DEFAULT_TEXT_ENCODER_URL)
+    try:
+        text_encoder_conf = _select_text_encoder_conf(text_encoder_url)
+    except Exception as error:
+        raise RuntimeError(
+            "Failed to prepare the text encoder while loading the model. "
+            "Check TEXT_ENCODER_MODE, TEXT_ENCODER_URL, HF_TOKEN/HUGGING_FACE_HUB_TOKEN, "
+            "and whether the text encoder server is running or the local model cache is complete. "
+            f"Original error: {type(error).__name__}: {error}"
+        ) from error
+
     runtime_conf = OmegaConf.create(
         {
             "checkpoint_dir": str(model_path),
-            "text_encoder": _select_text_encoder_conf(text_encoder_url),
+            "text_encoder": text_encoder_conf,
         }
     )
     model_cfg = OmegaConf.to_container(OmegaConf.merge(model_conf, runtime_conf), resolve=True)
     model_cfg.pop("checkpoint_dir", None)
 
-    model = instantiate_from_dict(model_cfg, overrides={"device": device})
+    try:
+        model = instantiate_from_dict(model_cfg, overrides={"device": device})
+    except Exception as error:
+        raise RuntimeError(
+            "Kimodo model initialization failed after text encoder setup. "
+            "This usually means the base checkpoint, text encoder, or adapter could not be loaded. "
+            f"Original error: {type(error).__name__}: {error}"
+        ) from error
     if eval_mode:
         model = model.eval()
     if return_resolved_name:

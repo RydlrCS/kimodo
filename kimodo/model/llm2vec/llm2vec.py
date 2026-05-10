@@ -123,7 +123,7 @@ class LLM2Vec(nn.Module):
         # pop out encoder args
         keys = ["pooling_mode", "max_length", "doc_max_length", "skip_instruction"]
         encoder_args = {key: kwargs.pop(key, None) for key in keys if kwargs.get(key) is not None}
-        hf_token = kwargs.get("token")
+        hf_token = kwargs.pop("token", None)
 
         tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path, token=hf_token)
         tokenizer.pad_token = tokenizer.eos_token
@@ -134,7 +134,7 @@ class LLM2Vec(nn.Module):
 
         model_class = cls._get_model_class(config_class_name, enable_bidirectional=enable_bidirectional)
 
-        model = model_class.from_pretrained(base_model_name_or_path, **kwargs)
+        model = model_class.from_pretrained(base_model_name_or_path, token=hf_token, **kwargs)
 
         if os.path.isdir(base_model_name_or_path) and os.path.exists(f"{base_model_name_or_path}/config.json"):
             with open(f"{base_model_name_or_path}/config.json", "r") as fIn:
