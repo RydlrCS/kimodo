@@ -61,6 +61,43 @@ from transformers import (
 logger = logging.getLogger(__name__)
 
 
+def _clear_stale_peft_metadata(model: nn.Module) -> nn.Module:
+    """Remove stale PEFT markers left on merged base models.
+
+    Some PEFT versions keep `peft_config` / `_hf_peft_config_loaded` attributes
+    after `merge_and_unload()`. If left in place, a subsequent adapter load can
+    be interpreted as "multiple adapters" and produce key mismatch warnings.
+    """
+    if isinstance(model, PeftModel):
+        return model
+    for attr in ("peft_config", "_hf_peft_config_loaded"):
+        if hasattr(model, attr):
+            try:
+                delattr(model, attr)
+            except Exception:
+                pass
+    return model
+
+
+def _apply_peft_adapter(
+    model: nn.Module,
+    adapter_path: str,
+    hf_token: Optional[str],
+    *,
+    merge_after_load: bool,
+) -> nn.Module:
+    model = _clear_stale_peft_metadata(model)
+    model = PeftModel.from_pretrained(
+        model,
+        adapter_path,
+        token=hf_token,
+    )
+    if merge_after_load:
+        model = model.merge_and_unload()
+        model = _clear_stale_peft_metadata(model)
+    return model
+
+
 def batch_to_device(batch, target_device: device):
     """Send a pytorch batch to a device (CPU/GPU)"""
     for key in batch:
@@ -142,23 +179,23 @@ class LLM2Vec(nn.Module):
             config = PretrainedConfig.from_dict(config_dict)
             model.config._name_or_path = config._name_or_path
 
-        # For special case where config.json and adapter weights are in the same directory
-        if hasattr(model, "peft_config"):
-            model = PeftModel.from_pretrained(
+        # For local checkpoints that bundle adapter files with config.json.
+        # (For Hub repos we rely on explicit peft_model_name_or_path.)
+        if os.path.isdir(base_model_name_or_path) and os.path.exists(f"{base_model_name_or_path}/adapter_config.json"):
+            model = _apply_peft_adapter(
                 model,
                 base_model_name_or_path,
-                token=hf_token,
+                hf_token,
+                merge_after_load=True,
             )
-            model = model.merge_and_unload()
 
         if peft_model_name_or_path is not None:
-            model = PeftModel.from_pretrained(
+            model = _apply_peft_adapter(
                 model,
                 peft_model_name_or_path,
-                token=hf_token,
+                hf_token,
+                merge_after_load=merge_peft,
             )
-            if merge_peft:
-                model = model.merge_and_unload()
 
         config = {}
         config_addr = peft_model_name_or_path if peft_model_name_or_path is not None else base_model_name_or_path
