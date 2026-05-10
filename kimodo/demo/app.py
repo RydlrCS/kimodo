@@ -16,6 +16,7 @@ import viser
 from kimodo.assets import DEMO_ASSETS_ROOT
 from kimodo.model.load_model import load_model
 from kimodo.model.registry import resolve_model_name
+from kimodo.runtime.device import select_runtime_device
 from kimodo.skeleton import SkeletonBase, SOMASkeleton30
 from kimodo.tools import load_json
 from kimodo.viz import viser_utils
@@ -60,7 +61,13 @@ logging.getLogger("websockets.asyncio.server").setLevel(logging.CRITICAL)
 
 class Demo:
     def __init__(self, default_model_name: str = DEFAULT_MODEL):
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        # In hosted HF runtimes (including ZeroGPU), touching CUDA too early can
+        # crash startup before queue-managed inference starts.
+        requested_device = os.getenv("KIMODO_DEVICE")
+        running_in_space = bool(os.getenv("SPACE_ID")) or os.getenv("SYSTEM", "").strip().lower() == "spaces"
+        if requested_device is None and (HF_MODE or running_in_space):
+            requested_device = "cpu"
+        self.device = select_runtime_device(requested=requested_device)
         print(f"Using device: {self.device}")
         self.models: dict[str, ModelBundle] = {}
         resolved = resolve_model_name(default_model_name, "Kimodo")
