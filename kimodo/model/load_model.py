@@ -200,6 +200,15 @@ def _select_text_encoder_conf(text_encoder_url: str) -> dict:
     if mode == "local":
         return _build_local_text_encoder_conf()
     if mode == "api":
+        if (
+            not _is_local_text_encoder_url(text_encoder_url)
+            and local_api_url
+            and _is_local_text_encoder_url(local_api_url)
+            and _is_port_open(local_api_url)
+        ):
+            print(f"Using local text encoder API at {local_api_url} (remote URL also configured).")
+            _probe_api_text_encoder(local_api_url, autostart_enabled=False)
+            return _build_api_text_encoder_conf(local_api_url)
         try:
             _probe_api_text_encoder(text_encoder_url, autostart_enabled)
             return _build_api_text_encoder_conf(text_encoder_url)
