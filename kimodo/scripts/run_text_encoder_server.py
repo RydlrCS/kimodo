@@ -48,6 +48,8 @@ class DemoWrapper:
             return self.text_encoder
         except Exception as error:
             self.init_error = error
+            import traceback
+            traceback.print_exc()
             raise
 
     def __call__(self, text, filename, progress=gr.Progress()):

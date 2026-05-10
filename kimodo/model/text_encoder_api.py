@@ -44,7 +44,7 @@ class TextEncoderAPI:
         return self
 
     def _extract_result_path(self, result):
-        """Extract npy path from heterogeneous gradio_client responses."""
+        """Extract npy path from heterogeneous gradio_client responses with error detection."""
         candidates = []
         if isinstance(result, (list, tuple)):
             candidates = list(result)
@@ -52,21 +52,15 @@ class TextEncoderAPI:
             candidates = [result]
 
         for item in candidates:
-            # Check for error messages first (e.g., "## Encoder initialization failed")
+            # Check for error title marker first (e.g., "## Encoder initialization failed")
             if isinstance(item, str):
                 if item and item.startswith("##"):
-                    # This is an error message from the Gradio server
                     error_msg = item.replace("##", "").strip()
-                    if "initialization failed" in error_msg.lower():
-                        raise RuntimeError(
-                            f"Text encoder initialization failed. This usually indicates:\n"
-                            f"  - Missing or invalid HF_TOKEN for gated models (Llama-3)\n"
-                            f"  - Poor network connectivity during model download\n"
-                            f"  Original error: {error_msg}"
-                        )
-                    raise RuntimeError(f"Text encoder API error: {error_msg}")
-                if "failed" in item.lower() or "error" in item.lower():
-                    raise RuntimeError(f"Text encoder API error: {item}")
+                    # Collect remaining candidates for more detail
+                    rest = [c for c in candidates if c is not item and isinstance(c, str) and c]
+                    detail = " | ".join(rest) if rest else ""
+                    full_msg = f"{error_msg}" + (f": {detail}" if detail else "")
+                    raise RuntimeError(f"Text encoder server error: {full_msg}")
                 if item and item.endswith(".npy"):
                     return item
                 if item:
