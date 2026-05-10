@@ -60,6 +60,15 @@ def _start_text_encoder_server() -> subprocess.Popen:
     env = os.environ.copy()
     env["GRADIO_SERVER_NAME"] = "127.0.0.1"
     env["GRADIO_SERVER_PORT"] = str(TEXT_ENCODER_PORT)
+    
+    # Ensure HF_TOKEN is explicitly passed to text encoder subprocess
+    hf_token = os.environ.get("HF_TOKEN")
+    if hf_token:
+        env["HF_TOKEN"] = hf_token
+        print(f"[movimento][boot] HF_TOKEN set for text encoder (len={len(hf_token)})")
+    else:
+        print(f"[movimento][boot] WARNING: HF_TOKEN not found in environment")
+
     print(f"[movimento][boot] starting text encoder server at 127.0.0.1:{TEXT_ENCODER_PORT}")
     proc = subprocess.Popen([sys.executable, "-m", "kimodo.scripts.run_text_encoder_server"], env=env)
     _wait_for_port(TEXT_ENCODER_PORT, timeout_s=45.0)
