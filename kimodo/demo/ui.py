@@ -3374,12 +3374,9 @@ def create_gui(
 
         session = demo.client_sessions[client_id]
 
-        # Space bar: only toggle on FIRST press
+        # Space bar: toggle play/pause
         if event.key == " ":
-            now = time.monotonic()
-            if now - session.last_space_toggle_time >= 0.2:
-                session.last_space_toggle_time = now
-                play_pause_button_callback(session)
+            play_pause_button_callback(session)
             return
 
         # Handle arrow keys: frame navigation (fast OS repeat with 50ms debounce).

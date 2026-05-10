@@ -133,7 +133,7 @@ Please keep this tab open — the demo will start automatically when it's your t
 
 def _welcome_modal_markdown() -> str:
     mins = int(MAX_SESSION_MINUTES) if MAX_SESSION_MINUTES == int(MAX_SESSION_MINUTES) else MAX_SESSION_MINUTES
-    return f"""## Welcome to Kimodo Demo
+    return f"""## Welcome to Movimento Demo
 
 You have been granted a **{mins}-minute** demo session.
 Your session timer has started.
