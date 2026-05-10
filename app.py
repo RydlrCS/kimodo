@@ -28,7 +28,7 @@ os.environ.setdefault("HF_MODE", "1")
 # Avoid local LLM2Vec fallback on Spaces (requires gated Llama weights).
 os.environ.setdefault("TEXT_ENCODER_MODE", "api")
 os.environ.setdefault("TEXT_ENCODER", "llm2vec")
-os.environ.setdefault("LLM2VEC_BASE_MODEL", "rydlrKE/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp")
+os.environ.setdefault("LLM2VEC_BASE_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct")
 os.environ.setdefault(
     "LLM2VEC_PEFT_MODEL",
     "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",

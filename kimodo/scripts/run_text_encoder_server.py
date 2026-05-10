@@ -17,7 +17,7 @@ DEFAULT_SERVER_NAME = "0.0.0.0"
 DEFAULT_SERVER_PORT = 9550
 DEFAULT_TMP_FOLDER = "/tmp/text_encoder/"
 DEFAULT_TEXT_ENCODER = "llm2vec"
-DEFAULT_LLM2VEC_BASE = "rydlrKE/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp"
+DEFAULT_LLM2VEC_BASE = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 DEFAULT_LLM2VEC_PEFT = "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised"
 TEXT_ENCODER_PRESETS = {
     "llm2vec": {
