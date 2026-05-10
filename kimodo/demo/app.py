@@ -626,10 +626,13 @@ class Demo:
         self._apply_constraint_overlay_visibility(session)
 
     def run(self) -> None:
-        update_counter = 0
-        cuda_check_interval = 300
+        last_loop_time = time.perf_counter()
+        last_cuda_check_time = 0.0
         while True:
-            last_update_time = time.time()
+            loop_start_time = time.perf_counter()
+            delta_time = loop_start_time - last_loop_time
+            last_loop_time = loop_start_time
+
             if self.models:
                 # the max playback speed is 2x the model fps (from gui_playback_speed_buttons)
                 playback_fps = max(bundle.model_fps for bundle in self.models.values()) * 2.0
@@ -639,25 +642,32 @@ class Demo:
             # update each client session independently
             #   copy to a list first to avoid changing size if client disconnects
             for client_id, session in list(self.client_sessions.items()):
-                update_interval = int(playback_fps / (session.playback_speed * session.model_fps))
-                new_frame_idx = session.frame_idx
-                if session.playing and update_counter % update_interval == 0:
-                    if session.frame_idx >= session.max_frame_idx:
-                        new_frame_idx = 0
-                    else:
-                        new_frame_idx = session.frame_idx + 1
+                if not session.playing:
+                    continue
+                if session.model_fps <= 0:
+                    continue
 
-                    # make sure the client is still active before updating the frame
-                    if self.client_active(client_id):
-                        self.set_frame(client_id, new_frame_idx)
+                # Time-based stepping keeps playback smooth even if loop cadence jitters.
+                session.playback_time_accumulator += max(0.0, delta_time) * max(0.0, session.playback_speed)
+                frame_period = 1.0 / session.model_fps
+                if session.playback_time_accumulator < frame_period:
+                    continue
 
-            if update_counter % cuda_check_interval == 0:
+                frames_to_advance = int(session.playback_time_accumulator / frame_period)
+                session.playback_time_accumulator -= frames_to_advance * frame_period
+                frame_count = max(1, session.max_frame_idx + 1)
+                new_frame_idx = (session.frame_idx + frames_to_advance) % frame_count
+
+                # make sure the client is still active before updating the frame
+                if self.client_active(client_id):
+                    self.set_frame(client_id, new_frame_idx)
+
+            if loop_start_time - last_cuda_check_time >= 5.0:
                 self.check_cuda_health()
+                last_cuda_check_time = loop_start_time
 
-            time_remaining = max(0, 1.0 / playback_fps - (time.time() - last_update_time))
+            time_remaining = max(0.0, 1.0 / playback_fps - (time.perf_counter() - loop_start_time))
             time.sleep(time_remaining)
-            update_counter += 1
-            update_counter %= playback_fps  # wrap around to 0 every second
 
     def configure_theme(
         self,
