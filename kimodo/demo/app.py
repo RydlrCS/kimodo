@@ -10,6 +10,16 @@ import time
 from typing import Optional
 
 import numpy as np
+
+# Import spaces before any CUDA-related imports in HF Spaces to avoid
+# ZeroGPU startup race conditions from background threads.
+try:
+    import spaces  # type: ignore  # noqa: F401
+
+    os.environ["GRADIO_HOT_RELOAD"] = "False"
+except (ImportError, RuntimeError):
+    pass
+
 import torch
 
 import viser
