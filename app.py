@@ -31,10 +31,21 @@ os.environ.setdefault("TEXT_ENCODER", "llm2vec")
 os.environ.setdefault("LLM2VEC_BASE_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct")
 os.environ.setdefault(
     "LLM2VEC_PEFT_MODEL",
-    "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+    "McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised",
 )
+hf_token = os.environ.get("HF_TOKEN")
+if hf_token:
+    os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", hf_token)
+    os.environ.setdefault("HF_HUB_TOKEN", hf_token)
+    os.environ.setdefault("HUGGINGFACEHUB_API_TOKEN", hf_token)
 TEXT_ENCODER_PORT = int(os.environ.get("TEXT_ENCODER_PORT", "9550"))
-os.environ.setdefault("TEXT_ENCODER_URL", f"http://127.0.0.1:{TEXT_ENCODER_PORT}/")
+TEXT_ENCODER_SOURCE = os.environ.get("TEXT_ENCODER_SOURCE", "local").strip().lower()
+if TEXT_ENCODER_SOURCE not in {"local", "remote"}:
+    raise RuntimeError("TEXT_ENCODER_SOURCE must be 'local' or 'remote'.")
+if TEXT_ENCODER_SOURCE == "local":
+    os.environ.setdefault("TEXT_ENCODER_URL", f"http://127.0.0.1:{TEXT_ENCODER_PORT}/")
+elif "TEXT_ENCODER_URL" not in os.environ:
+    raise RuntimeError("TEXT_ENCODER_URL is required when TEXT_ENCODER_SOURCE=remote.")
 # Prefer CPU on ZeroGPU to avoid low-level CUDA init crashes during model load.
 os.environ.setdefault("KIMODO_DEVICE", "cpu")
 
@@ -84,15 +95,20 @@ def main() -> None:
         # Invoke GPU function to satisfy HF Spaces startup requirement.
         _gpu_healthcheck()
 
-        # Keep existing embedding pipeline (TextEncoderAPI -> local llm2vec server).
-        text_encoder_proc = _start_text_encoder_server()
+        text_encoder_proc = None
+        if TEXT_ENCODER_SOURCE == "local":
+            # Keep existing embedding pipeline (TextEncoderAPI -> local llm2vec server).
+            text_encoder_proc = _start_text_encoder_server()
+        else:
+            print(f"[movimento][boot] using remote text encoder: {os.environ['TEXT_ENCODER_URL']}")
 
         import kimodo
         from kimodo.demo.app import Demo
 
         print(f"[movimento][boot] kimodo_module={getattr(kimodo, '__file__', 'unknown')}")
         print(f"[movimento][boot] mode=native_direct port={PORT}")
-        print(f"[movimento][boot] text_encoder_pid={text_encoder_proc.pid}")
+        if text_encoder_proc is not None:
+            print(f"[movimento][boot] text_encoder_pid={text_encoder_proc.pid}")
         Demo()
 
         # Keep the process alive while Viser serves on SERVER_PORT.

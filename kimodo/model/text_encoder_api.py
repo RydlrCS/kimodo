@@ -55,6 +55,11 @@ class TextEncoderAPI:
         for item in candidates:
             if isinstance(item, str) and item and item.endswith(".npy"):
                 return item
+            if isinstance(item, dict):
+                for key in ("value", "path", "name"):
+                    value = item.get(key)
+                    if isinstance(value, str) and value.endswith(".npy"):
+                        return value
 
         # Second pass: collect all error indicators
         error_parts = []
@@ -62,6 +67,12 @@ class TextEncoderAPI:
             if isinstance(item, str) and item:
                 if item.startswith("##") or "failed" in item.lower() or "error" in item.lower():
                     error_parts.append(item.strip())
+            if isinstance(item, dict):
+                value = item.get("value")
+                if isinstance(value, str) and (
+                    value.startswith("##") or "failed" in value.lower() or "error" in value.lower()
+                ):
+                    error_parts.append(value.strip())
 
         if error_parts:
             # Combine all error messages
