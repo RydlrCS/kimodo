@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Post-processing utilities for motion generation output."""
 
+import logging
+import os
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
@@ -22,6 +24,15 @@ from .skeleton import (
     SOMASkeleton77,
     fk,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def extract_input_motion_from_constraints(
@@ -307,10 +318,23 @@ def post_process_motion(
     try:
         from motion_correction import motion_postprocess
     except ImportError as e:
-        raise RuntimeError(
-            "Motion correction is required for this postprocessing path but the "
-            "motion_correction package is not installed. Install with: pip install -e ."
-        ) from e
+        if _env_bool("KIMODO_STRICT_MOTION_CORRECTION", default=False):
+            raise RuntimeError(
+                "Motion correction is required for this postprocessing path but the "
+                "motion_correction package is not installed. Install with: pip install -e ."
+            ) from e
+
+        logger.warning(
+            "motion_correction package is not installed; skipping correction and returning "
+            "uncorrected motion. Set KIMODO_STRICT_MOTION_CORRECTION=true to fail instead."
+        )
+        global_rot_mats, posed_joints, _ = fk(local_rot_mats, root_positions, skeleton)
+        return {
+            "local_rot_mats": local_rot_mats,
+            "root_positions": root_positions,
+            "posed_joints": posed_joints,
+            "global_rot_mats": global_rot_mats,
+        }
     for b in range(batch_size):
         masks_b = constraint_masks_dict_lst[b] if batched_constraints else constraint_masks_dict
         motion_postprocess.correct_motion(
