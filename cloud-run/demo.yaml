@@ -1,0 +1,68 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: kimodo-demo
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/gpu-type: GPU_TYPE_PLACEHOLDER
+        run.googleapis.com/gpu-zonal-redundancy-disabled: "true"
+    spec:
+      containerConcurrency: 1
+      timeoutSeconds: 3600
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/kimodo/kimodo:latest
+          command: ["python", "-m", "kimodo.demo"]
+          ports:
+            - containerPort: 7860
+          resources:
+            limits:
+              cpu: "8"
+              memory: 24Gi
+              nvidia.com/gpu: "GPU_COUNT_PLACEHOLDER"
+          env:
+            - name: SERVER_NAME
+              value: "0.0.0.0"
+            - name: TEXT_ENCODER_URL
+              value: TEXT_ENCODER_URL_PLACEHOLDER
+            - name: TEXT_ENCODER_MODE
+              value: "api"
+            - name: HF_MODE
+              value: "false"
+            - name: HF_HOME
+              value: /workspace/.cache/huggingface
+            - name: LOCAL_CACHE
+              value: "true"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: HF_TOKEN_SECRET_NAME
+                  key: latest
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: HF_TOKEN_SECRET_NAME
+                  key: latest
+            - name: HF_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: HF_TOKEN_SECRET_NAME
+                  key: latest
+            - name: HUGGINGFACEHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: HF_TOKEN_SECRET_NAME
+                  key: latest
+            - name: KIMODO_DEFER_MODEL_LOAD
+              value: "true"
+  traffic:
+    - percent: 100
+      latestRevision: true

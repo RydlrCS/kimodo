@@ -61,8 +61,17 @@ class Demo:
         if resolved not in MODEL_NAMES:
             raise ValueError(f"Unknown model '{default_model_name}'. Expected one of: {MODEL_NAMES}")
         self.default_model_name = resolved
+        self.defer_model_load = os.getenv("KIMODO_DEFER_MODEL_LOAD", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self.ensure_examples_layout()
-        self.load_model(self.default_model_name)
+        if self.defer_model_load:
+            print("Deferring model load until first active client session.")
+        else:
+            self.load_model(self.default_model_name)
 
         # Serialize GPU-bound generation across all clients
         self._generation_lock = threading.Lock()

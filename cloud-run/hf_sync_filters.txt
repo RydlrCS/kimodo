@@ -1,0 +1,15 @@
+exclude .git/**
+exclude .pytest_cache/**
+exclude .mypy_cache/**
+exclude .ruff_cache/**
+exclude .nox/**
+exclude .tox/**
+exclude .venv/**
+exclude .tools/**
+exclude **/__pycache__/**
+exclude **/*.pyc
+exclude kimodo.egg-info/**
+exclude docs/_build/**
+exclude dist/**
+exclude *.log
+exclude nohup.out
